@@ -4,8 +4,8 @@
 // 이 파일을 쓰려면 먼저 아래 스크립트를 이 파일보다 앞에 로드해야 합니다:
 //   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
-const SUPABASE_URL = "https://womvrvsezmcwobanepto.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_hUUR6Ol1eDgA8p6_pC6cug_msirJXxI";
+const SUPABASE_URL = "https://fcxpzpdsqwzwaiwhjzqn.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_gig8Cm1XRn8CjUZz3goNLQ_N3YrytyL";
 
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
