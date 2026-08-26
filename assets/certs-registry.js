@@ -9,4 +9,18 @@ const CERTS_REGISTRY = [
     path: "certs/arch-siljak/index.html",
     questionCount: 1792,
   },
+  {
+    id: "waterproof-siljak",
+    name: "방수산업기사 실기",
+    subtitle: "필답형 · 방수시공",
+    path: "certs/waterproof-siljak/index.html",
+    questionCount: 159,
+  },
+  {
+    id: "safety-siljak",
+    name: "산업안전기사 필답형",
+    subtitle: "필답형 · 산업안전",
+    path: "certs/safety-siljak/index.html",
+    questionCount: 778,
+  },
 ];
