@@ -1,0 +1,260 @@
+:root{
+  --ink:#1b2a44;
+  --paper:#efe9da;
+  --paper-2:#e6dec8;
+  --card:#f8f5ec;
+  --line:#d8cfb0;
+  --muted:#6f6753;
+  --stamp:#b8432b;
+  --stamp-soft:#f3dcd3;
+  --seal:#2e6e5c;
+  --seal-soft:#dee8e2;
+  --radius:14px;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  min-height:100vh;
+}
+.serif{
+  font-family:"Noto Serif KR",Georgia,"Apple SD Gothic Neo",serif;
+}
+
+/* subtle paper grain via layered gradients */
+body{
+  background-image:
+    radial-gradient(circle at 18% 8%, rgba(184,67,43,0.05), transparent 40%),
+    radial-gradient(circle at 85% 92%, rgba(46,110,92,0.06), transparent 45%);
+  background-color:var(--paper);
+}
+
+.wrap{max-width:760px;margin:0 auto;padding:0 20px;}
+
+/* ---------- header ---------- */
+.hub-header{
+  padding:36px 0 22px;
+  border-bottom:1px solid var(--line);
+}
+.eyebrow{
+  font-size:12px;
+  letter-spacing:.18em;
+  text-transform:uppercase;
+  color:var(--stamp);
+  font-weight:700;
+  margin:0 0 8px;
+}
+.hub-title{
+  font-size:30px;
+  font-weight:700;
+  margin:0 0 6px;
+  letter-spacing:-.01em;
+}
+.hub-desc{
+  margin:0;
+  color:var(--muted);
+  font-size:14.5px;
+  line-height:1.5;
+}
+.hub-user-row{
+  margin-top:18px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  font-size:13px;
+  color:var(--muted);
+}
+.hub-user-row .email{color:var(--ink);font-weight:600;}
+.logout-btn{
+  border:1px solid var(--line);
+  background:var(--card);
+  color:var(--muted);
+  font-size:12.5px;
+  padding:6px 12px;
+  border-radius:999px;
+  cursor:pointer;
+}
+.logout-btn:hover{border-color:var(--stamp);color:var(--stamp);}
+
+/* ---------- cert grid ---------- */
+.cert-grid{
+  padding:26px 0 60px;
+  display:grid;
+  grid-template-columns:1fr;
+  gap:16px;
+}
+@media(min-width:560px){
+  .cert-grid{grid-template-columns:1fr 1fr;}
+}
+
+.ticket{
+  position:relative;
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  padding:20px 20px 18px 26px;
+  display:flex;
+  align-items:center;
+  gap:16px;
+  cursor:pointer;
+  text-decoration:none;
+  color:inherit;
+  transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+  overflow:hidden;
+}
+.ticket:hover{
+  transform:translateY(-2px);
+  box-shadow:0 10px 24px -14px rgba(27,42,68,.35);
+  border-color:#c9bd94;
+}
+/* perforated left edge */
+.ticket::before{
+  content:"";
+  position:absolute;
+  left:0; top:0; bottom:0;
+  width:10px;
+  background-image:radial-gradient(circle, var(--paper) 2.6px, transparent 2.7px);
+  background-size:10px 14px;
+  background-position:center;
+}
+.ticket-body{flex:1;min-width:0;}
+.ticket-name{
+  font-size:17px;
+  font-weight:700;
+  margin:0 0 4px;
+  letter-spacing:-.01em;
+}
+.ticket-subtitle{
+  font-size:12.5px;
+  color:var(--muted);
+  margin:0 0 10px;
+}
+.ticket-meta{
+  font-size:12px;
+  color:var(--muted);
+}
+.ticket-cta{
+  font-size:12.5px;
+  font-weight:700;
+  color:var(--seal);
+}
+
+/* signature element: ink-stamp progress ring */
+.stamp-ring{
+  --pct:0;
+  position:relative;
+  width:56px;height:56px;flex-shrink:0;
+  border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  transform:rotate(-6deg);
+}
+.stamp-ring svg{position:absolute;inset:0;transform:rotate(-90deg);}
+.stamp-ring .stamp-track{fill:none;stroke:var(--line);stroke-width:5;}
+.stamp-ring .stamp-fill{
+  fill:none;stroke:var(--stamp);stroke-width:5;stroke-linecap:round;
+  transition:stroke-dashoffset .5s ease;
+}
+.stamp-ring .stamp-pct{
+  font-size:13px;
+  font-weight:800;
+  color:var(--stamp);
+  font-family:"Noto Serif KR",Georgia,serif;
+}
+.stamp-ring.is-complete .stamp-fill{stroke:var(--seal);}
+.stamp-ring.is-complete .stamp-pct{color:var(--seal);}
+
+.empty-note{
+  font-size:12px;
+  color:var(--muted);
+  padding:6px 0 0;
+}
+
+/* ---------- coming soon ghost card ---------- */
+.ticket.ghost{
+  cursor:default;
+  border-style:dashed;
+  color:var(--muted);
+  background:transparent;
+}
+.ticket.ghost:hover{transform:none;box-shadow:none;border-color:var(--line);}
+.ticket.ghost .ticket-name{color:var(--muted);}
+
+/* ---------- login screen ---------- */
+.login-screen{
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:24px;
+}
+.login-card{
+  width:100%;
+  max-width:360px;
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  padding:32px 28px;
+  text-align:center;
+}
+.login-seal{
+  width:52px;height:52px;
+  margin:0 auto 16px;
+  border-radius:50%;
+  border:2.5px solid var(--stamp);
+  display:flex;align-items:center;justify-content:center;
+  color:var(--stamp);
+  font-family:"Noto Serif KR",Georgia,serif;
+  font-weight:800;
+  font-size:20px;
+  transform:rotate(-6deg);
+}
+.login-title{
+  font-size:19px;
+  font-weight:700;
+  margin:0 0 6px;
+}
+.login-desc{
+  font-size:13px;
+  color:var(--muted);
+  margin:0 0 22px;
+  line-height:1.5;
+}
+.login-input{
+  width:100%;
+  padding:12px 14px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  font-size:14px;
+  background:#fff;
+  color:var(--ink);
+  margin-bottom:10px;
+}
+.login-input:focus{outline:2px solid var(--seal);outline-offset:1px;}
+.login-btn{
+  width:100%;
+  padding:12px 14px;
+  border:none;
+  border-radius:10px;
+  background:var(--ink);
+  color:#fff;
+  font-size:14px;
+  font-weight:700;
+  cursor:pointer;
+}
+.login-btn:hover{background:#0f1b30;}
+.login-btn:disabled{opacity:.5;cursor:default;}
+.login-status{
+  margin-top:14px;
+  font-size:12.5px;
+  color:var(--muted);
+  min-height:16px;
+}
+.login-status.ok{color:var(--seal);}
+.login-status.err{color:var(--stamp);}
+
+@media (prefers-reduced-motion:reduce){
+  .ticket, .stamp-ring .stamp-fill{transition:none;}
+}
