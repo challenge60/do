@@ -35,7 +35,7 @@ try{
       const icon512 = buildHubIcon(512);
       const manifest = {
         id: location.pathname.replace(/[^/]*$/, ''),
-        name: "My도전 자격증 학습노트",
+        name: "My도전 Note",
         short_name: "My도전",
         start_url: location.origin + location.pathname,
         scope: location.origin + location.pathname.replace(/[^/]*$/, ''),
@@ -294,7 +294,7 @@ async function renderHub(session) {
   root.innerHTML = `
     <header class="hub-topbar">
       <div class="wrap">
-        <span class="hub-mark">My도전</span><span class="hub-mark-sub">자격증 학습노트</span>
+        <span class="hub-mark">My도전</span><span class="hub-mark-sub">Note</span>
         <button type="button" class="hub-install-btn" id="hubInstallBtn" style="display:none;">📲 앱 설치</button>
       </div>
     </header>
@@ -347,13 +347,13 @@ function renderLogin(statusMsg, statusType, mode) {
   root.innerHTML = `
     <header class="hub-topbar">
       <div class="wrap">
-        <span class="hub-mark">My도전</span><span class="hub-mark-sub">자격증 학습노트</span>
+        <span class="hub-mark">My도전</span><span class="hub-mark-sub">Note</span>
         <button type="button" class="hub-install-btn" id="hubInstallBtn" style="display:none;">📲 앱 설치</button>
       </div>
     </header>
     <div class="login-screen">
       <div class="login-card">
-        <h1 class="login-title">My도전 자격증 학습노트</h1>
+        <h1 class="login-title">My도전 Note</h1>
         <div class="login-mode-tabs">
           <button type="button" class="login-mode-tab ${!isSignup ? "active" : ""}" data-mode="login">로그인</button>
           <button type="button" class="login-mode-tab ${isSignup ? "active" : ""}" data-mode="signup">회원가입</button>
@@ -525,7 +525,7 @@ function renderConfirm(tokenHashParams) {
   root.innerHTML = `
     <header class="hub-topbar">
       <div class="wrap">
-        <span class="hub-mark">My도전</span><span class="hub-mark-sub">자격증 학습노트</span>
+        <span class="hub-mark">My도전</span><span class="hub-mark-sub">Note</span>
       </div>
     </header>
     <div class="login-screen">

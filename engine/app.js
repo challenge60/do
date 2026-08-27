@@ -364,14 +364,21 @@ async function maybeAskAdminPublish(id, payload){
 }
 
 /* ============ 활성 자격증 설정 적용 (기본 EXAM_CONFIG 또는 가져온 데이터의 examConfig) ============ */
+// 자격증별 실기/필답형 구분(짧은 표기). CERT_ID는 data.js가 정의하는 전역 상수.
+// 새 자격증을 추가할 때 이 표에 없으면 cfg.subtitle을 그대로 쓰도록 폴백 처리됨.
+const SHORT_SUB_BY_CERT = { "arch-siljak":"실기", "waterproof-siljak":"실기", "safety-siljak":"필답형" };
 function activeExamConfig(){
   return store.examConfig || EXAM_CONFIG;
 }
+function shortSubOf(cfg){
+  return SHORT_SUB_BY_CERT[typeof CERT_ID !== "undefined" ? CERT_ID : ""] || cfg.subtitle;
+}
 function applyExamConfig(){
   const cfg = activeExamConfig();
-  document.title = cfg.titleText;
-  document.querySelector(".brand .mark").textContent = cfg.markText;
-  document.querySelector(".brand .sub").textContent = cfg.subtitle;
+  const shortSub = shortSubOf(cfg);
+  document.title = `My도전. ${cfg.markText} ${shortSub}`;
+  document.querySelector(".brand .mark").textContent = "My도전";
+  document.querySelector(".brand .sub").textContent = `${cfg.markText} ${shortSub}`;
   const verEl = document.querySelector(".brand .ver");
   if(verEl) verEl.textContent = `Ver. ${APP_VERSION}`;
 }
@@ -3759,8 +3766,10 @@ async function buildShareText(q, withAnswer){
   const multiRound = datasetHasMultiRound(getData());
   const label = yearRoundLabel(q, multiRound) + (q.no?`-${q.no}`:"");
   const lines = [];
-  const appTitle = (typeof EXAM_CONFIG !== "undefined" && EXAM_CONFIG.titleText) ? EXAM_CONFIG.titleText : "자격증 필답노트";
-  lines.push(`${appTitle} · ${label}${q.unitMajor?" · "+q.unitMajor:""}${q.unitMinor?" · "+q.unitMinor:""}`);
+  const cfg = (typeof EXAM_CONFIG !== "undefined") ? EXAM_CONFIG : { markText: "", subtitle: "" };
+  const appTitle = "My도전 Note";
+  const certLine = `${cfg.markText} ${shortSubOf(cfg)}`.trim();
+  lines.push(`${appTitle} · ${certLine} · ${label}${q.unitMajor?" · "+q.unitMajor:""}${q.unitMinor?" · "+q.unitMinor:""}`);
   lines.push("");
   lines.push("[문제]");
   lines.push(plainTextOf(q.question));
@@ -4011,7 +4020,9 @@ async function buildQuestionShareCanvas(q, withAnswer){
   const contentW = W - PAD*2;
   const MAX_IMG_H = 360;
   const C = SHARE_COLORS;
-  const appTitle = (typeof EXAM_CONFIG !== "undefined" && EXAM_CONFIG.titleText) ? EXAM_CONFIG.titleText : "자격증 필답노트";
+  const examCfg = (typeof EXAM_CONFIG !== "undefined") ? EXAM_CONFIG : { markText: "", subtitle: "" };
+  const appTitle = "My도전 Note";
+  const certLine = `${examCfg.markText} ${shortSubOf(examCfg)}`.trim();
   const shareUrl = await shareShortenUrl(location.origin + location.pathname + "?q=" + encodeURIComponent(q.id));
   const multiRound = datasetHasMultiRound(getData());
   const label = yearRoundLabel(q, multiRound) + (q.no?`-${q.no}`:"");
@@ -4088,7 +4099,7 @@ async function buildQuestionShareCanvas(q, withAnswer){
   ctx.font = "400 15px 'IBM Plex Sans KR', sans-serif";
   ctx.fillStyle = "rgba(255,255,255,0.85)";
   const subj = q.unitMajor || "";
-  ctx.fillText(`${subj}${subj?" · ":""}${label} 기출`, PAD, 68);
+  ctx.fillText(`${certLine} · ${subj}${subj?" · ":""}${label} 기출`, PAD, 68);
 
   const bodyY = headerH + 14;
   ctx.fillStyle = C.card;

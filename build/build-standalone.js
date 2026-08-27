@@ -46,6 +46,7 @@ function buildOne(cert, appCss, appJs, bodyTemplate) {
   const body = bodyTemplate
     .split('{{MARK}}').join(cert.mark)
     .split('{{SUB}}').join(cert.sub)
+    .split('{{SHORT_SUB}}').join(cert.shortSub || cert.sub)
     .split('{{COUNT}}').join(String(cert.count))
     .split('{{YEAR_RANGE}}').join(cert.yearRange || '');
 
@@ -64,7 +65,7 @@ function buildOne(cert, appCss, appJs, bodyTemplate) {
     '<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">',
     '<meta http-equiv="Pragma" content="no-cache">',
     '<meta http-equiv="Expires" content="0">',
-    `<title>${cert.titleText}</title>`,
+    `<title>My도전. ${cert.mark} ${cert.shortSub || cert.sub}</title>`,
     '<link rel="preconnect" href="https://fonts.googleapis.com">',
     '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>',
     '<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">',

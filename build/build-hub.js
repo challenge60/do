@@ -79,6 +79,7 @@ function main() {
       .split('{{MARK}}').join(cert.mark)
       .split('{{SHORT_MARK}}').join(cert.shortMark || cert.mark)
       .split('{{SUB}}').join(cert.sub)
+      .split('{{SHORT_SUB}}').join(cert.shortSub || cert.sub)
       .split('{{COUNT}}').join(String(cert.count));
 
     const outDir = path.join(CERTS_DIR, cert.id);
