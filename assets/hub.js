@@ -178,18 +178,20 @@ async function fetchProfile(userId) {
   try {
     const { data, error } = await supabaseClient
       .from("profiles")
-      .select("nickname")
+      .select("nickname, approved")
       .eq("user_id", userId)
       .maybeSingle();
     if (error) throw error;
-    return data ? data.nickname : null;
+    // 프로필 자체가 없는 사용자(이 기능이 생기기 전 가입자 등)는 승인 게이트가 없던 시절
+    // 가입한 사람이므로 차단하지 않는다. approved는 프로필이 있을 때만 의미를 가짐.
+    return { nickname: data ? data.nickname : null, approved: data ? data.approved : true };
   } catch (e) {
-    console.warn("닉네임을 불러오지 못했습니다:", e.message);
-    return null;
+    console.warn("프로필을 불러오지 못했습니다:", e.message);
+    return { nickname: null, approved: true };
   }
 }
 
-function openNicknameModal(currentNickname, onSaved) {
+function openNicknameModal(currentNickname, onSaved, extraFields) {
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
   overlay.innerHTML = `
@@ -217,7 +219,7 @@ function openNicknameModal(currentNickname, onSaved) {
     const { data: { session } } = await supabaseClient.auth.getSession();
     if (!session) { status.textContent = "로그인이 필요해요."; return; }
     const { error } = await supabaseClient.from("profiles").upsert(
-      { user_id: session.user.id, nickname, updated_at: new Date().toISOString() },
+      { user_id: session.user.id, nickname, updated_at: new Date().toISOString(), ...(extraFields || {}) },
       { onConflict: "user_id" }
     );
     if (error) {
@@ -270,11 +272,12 @@ function openPasswordChangeModal() {
 
 async function renderHub(session) {
   const user = session.user;
-  const [progressMap, isAdmin, nickname] = await Promise.all([
+  const [progressMap, isAdmin, profile] = await Promise.all([
     fetchProgressMap(user.id),
     checkIsAdmin(user.id),
     fetchProfile(user.id),
   ]);
+  const nickname = profile.nickname;
 
   const cards = CERTS_REGISTRY.map((cert) => {
     const { solved, pct, acc } = computeStats(progressMap[cert.id], cert.questionCount);
@@ -436,7 +439,7 @@ function renderLogin(statusMsg, statusType, mode) {
         // 건너뛰고, 이메일 인증 링크를 누른 뒤 처음 로그인할 때 다시 물어보는 게 안전함)
         if (data.session) {
           const { error: profileError } = await supabaseClient.from("profiles").upsert(
-            { user_id: data.user.id, nickname, interested_certs: interestedCerts, updated_at: new Date().toISOString() },
+            { user_id: data.user.id, nickname, interested_certs: interestedCerts, approved: false, updated_at: new Date().toISOString() },
             { onConflict: "user_id" }
           );
           if (profileError) {
@@ -448,12 +451,12 @@ function renderLogin(statusMsg, statusType, mode) {
               : "가입은 완료됐지만 닉네임 저장에 실패했어요: " + profileError.message;
             status.className = "login-status err";
             btn.disabled = false;
-            openNicknameModal(null, () => { window.location.reload(); });
+            openNicknameModal(null, () => { window.location.reload(); }, { approved: false, interested_certs: interestedCerts });
             return;
           }
-          status.textContent = "가입 완료! 잠시 후 자동으로 이동해요.";
+          status.textContent = "가입 완료! 관리자 승인 후 이용하실 수 있어요. 잠시 후 승인 대기 화면으로 이동해요.";
           status.className = "login-status ok";
-          // 아래 onAuthStateChange(SIGNED_IN)가 자동으로 목록 화면(또는 next 자격증)으로 이동시킴
+          // 아래 onAuthStateChange(SIGNED_IN)가 자동으로 승인 대기 화면(또는 승인된 경우 목록 화면)으로 이동시킴
         } else {
           sessionStorage.setItem("pendingNickname", nickname);
           sessionStorage.setItem("pendingInterestedCerts", JSON.stringify(interestedCerts));
@@ -589,12 +592,42 @@ async function applyPendingProfileIfAny(userId) {
   sessionStorage.removeItem("pendingInterestedCerts");
   try {
     await supabaseClient.from("profiles").upsert(
-      { user_id: userId, nickname, interested_certs: interestedCerts, updated_at: new Date().toISOString() },
+      { user_id: userId, nickname, interested_certs: interestedCerts, approved: false, updated_at: new Date().toISOString() },
       { onConflict: "user_id" }
     );
   } catch (e) {
     console.warn("가입 시 입력한 닉네임 반영 실패:", e.message);
   }
+}
+
+function renderPendingApproval(email) {
+  root.innerHTML = `
+    <header class="hub-topbar">
+      <div class="wrap">
+        <span class="hub-mark">My도전</span><span class="hub-mark-sub">Note</span>
+      </div>
+    </header>
+    <div class="login-screen">
+      <div class="login-card">
+        <h1 class="login-title">가입 승인 대기 중</h1>
+        <p class="login-desc">${escapeHtml(email)} 계정은 아직 관리자 승인을 기다리고 있어요.<br>승인되면 바로 이용하실 수 있어요. 잠시만 기다려주세요.</p>
+        <button type="button" class="logout-btn" id="pendingLogoutBtn" style="width:100%;">로그아웃</button>
+      </div>
+    </div>`;
+  document.getElementById("pendingLogoutBtn").addEventListener("click", async () => {
+    await supabaseClient.auth.signOut();
+  });
+}
+
+// 로그인 성공 직후 공통으로 거치는 관문: 승인 대기 중이면 허브로 못 들어가게 막는다.
+async function proceedAfterLogin(session) {
+  const profile = await fetchProfile(session.user.id);
+  if (profile.approved === false) {
+    renderPendingApproval(session.user.email);
+    return;
+  }
+  if (goToNextIfAny()) return;
+  renderHub(session);
 }
 
 async function boot() {
@@ -607,8 +640,7 @@ async function boot() {
   const { data: { session } } = await supabaseClient.auth.getSession();
   if (session) {
     await applyPendingProfileIfAny(session.user.id);
-    if (goToNextIfAny()) return;
-    renderHub(session);
+    await proceedAfterLogin(session);
   } else {
     renderLogin(authError, authError ? "err" : undefined);
   }
@@ -617,8 +649,7 @@ async function boot() {
 supabaseClient.auth.onAuthStateChange(async (event, session) => {
   if (event === "SIGNED_IN" && session) {
     await applyPendingProfileIfAny(session.user.id);
-    if (goToNextIfAny()) return;
-    renderHub(session);
+    await proceedAfterLogin(session);
   } else if (event === "SIGNED_OUT") {
     renderLogin();
   }

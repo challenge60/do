@@ -68,6 +68,29 @@ async function fetchCommentedQuestions() {
   return data || [];
 }
 
+async function fetchPendingApprovals() {
+  const { data, error } = await supabaseClient.rpc("admin_get_pending_approvals");
+  if (error) throw error;
+  return data || [];
+}
+
+async function setApproval(userId, isApproved, btn) {
+  if (btn) btn.disabled = true;
+  try {
+    const { error } = await supabaseClient.rpc("admin_set_approval", {
+      target_user_id: userId,
+      is_approved: isApproved,
+    });
+    if (error) throw error;
+    return true;
+  } catch (e) {
+    alert("처리 실패: " + e.message);
+    return false;
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 function certPathFor(certId) {
   const found = (typeof CERTS_REGISTRY !== "undefined" ? CERTS_REGISTRY : []).find((c) => c.id === certId);
   return found ? found.path : null;
@@ -143,12 +166,13 @@ async function downloadAllQuestionData(btn) {
 
 async function renderDashboard() {
   renderLoading();
-  let summary, userStats, commentedQuestions;
+  let summary, userStats, commentedQuestions, pendingApprovals;
   try {
-    [summary, userStats, commentedQuestions] = await Promise.all([
+    [summary, userStats, commentedQuestions, pendingApprovals] = await Promise.all([
       fetchSummary(),
       fetchUserStats(),
       fetchCommentedQuestions(),
+      fetchPendingApprovals(),
     ]);
   } catch (e) {
     console.error(e);
@@ -204,11 +228,32 @@ async function renderDashboard() {
       ⬇ ${escapeHtml(cert.name)} — data.js 다운로드 (${cert.questionCount.toLocaleString()}문항)
     </a>`).join("");
 
+  const pendingRows = pendingApprovals.map((p) => `
+    <tr data-user-id="${escapeHtml(p.user_id)}">
+      <td>${escapeHtml(p.nickname || "(닉네임 없음)")}</td>
+      <td>${escapeHtml(p.email || "-")}</td>
+      <td>${(p.interested_certs || []).map(certLabel).map(escapeHtml).join(", ") || "—"}</td>
+      <td>${fmtDate(p.signed_up_at)}</td>
+      <td>
+        <button type="button" class="admin-approve-btn" data-action="approve" style="border:1px solid var(--teal);background:var(--teal);color:#fff;font-size:12px;font-weight:600;padding:6px 12px;border-radius:8px;cursor:pointer;margin-right:6px;">승인</button>
+        <button type="button" class="admin-approve-btn" data-action="reject" style="border:1px solid var(--rose,#c0392b);background:#fff;color:var(--rose,#c0392b);font-size:12px;font-weight:600;padding:6px 12px;border-radius:8px;cursor:pointer;">거절</button>
+      </td>
+    </tr>`).join("");
+
   root.innerHTML = `
     <div class="admin-wrap">
       <a class="admin-back" href="index.html">← 목록으로</a>
       <p class="admin-title">관리자 대시보드</p>
       <p class="admin-sub">가입자 현황, 계정별 사용량, 데이터 백업을 한 곳에서 확인합니다.</p>
+
+      ${pendingApprovals.length ? `
+      <p class="admin-section-title">🔔 승인 대기 중인 가입자 (${pendingApprovals.length}명)</p>
+      <div class="admin-table-wrap" style="margin-bottom:24px;border-color:var(--amber);">
+        <table class="admin-table">
+          <thead><tr><th>닉네임</th><th>이메일</th><th>관심 자격증</th><th>가입일</th><th>처리</th></tr></thead>
+          <tbody>${pendingRows}</tbody>
+        </table>
+      </div>` : ""}
 
       <div class="admin-summary-grid">
         <div class="admin-summary-card">
@@ -284,6 +329,19 @@ async function renderDashboard() {
     </div>`;
 
   document.getElementById("backupBtn").addEventListener("click", (e) => downloadBackup(e.currentTarget));
+  document.querySelectorAll(".admin-approve-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const row = btn.closest("tr");
+      const userId = row.dataset.userId;
+      const approve = btn.dataset.action === "approve";
+      if (!approve && !confirm("이 가입 신청을 거절할까요? (계정 자체는 삭제되지 않고, 나중에 다시 승인할 수 있어요)")) return;
+      const ok = await setApproval(userId, approve, btn);
+      if (ok) {
+        row.style.opacity = "0.4";
+        row.querySelectorAll("button").forEach((b) => (b.disabled = true));
+      }
+    });
+  });
   document.getElementById("allDataBtn").addEventListener("click", (e) => downloadAllQuestionData(e.currentTarget));
 }
 
