@@ -270,12 +270,30 @@ function openPasswordChangeModal() {
 }
 
 
+async function fetchCertTopRankers() {
+  try {
+    const { data, error } = await supabaseClient.rpc("get_cert_top_rankers");
+    if (error) throw error;
+    const byCert = {};
+    (data || []).forEach((row) => {
+      if (!byCert[row.cert_id]) byCert[row.cert_id] = [];
+      byCert[row.cert_id].push(row);
+    });
+    return byCert;
+  } catch (e) {
+    console.warn("과목별 랭킹을 불러오지 못했습니다:", e.message);
+    return {};
+  }
+}
+const RANK_MEDALS = ["🥇", "🥈", "🥉"];
+
 async function renderHub(session) {
   const user = session.user;
-  const [progressMap, isAdmin, profile] = await Promise.all([
+  const [progressMap, isAdmin, profile, topRankersByCert] = await Promise.all([
     fetchProgressMap(user.id),
     checkIsAdmin(user.id),
     fetchProfile(user.id),
+    fetchCertTopRankers(),
   ]);
   const nickname = profile.nickname;
 
@@ -283,12 +301,17 @@ async function renderHub(session) {
     const { solved, pct, acc } = computeStats(progressMap[cert.id], cert.questionCount);
     const metaLine = `${escapeHtml(cert.subtitle)} · 진도 ${solved}/${cert.questionCount.toLocaleString()}문항`
       + (acc !== null ? ` · 정답률 ${acc}%` : "");
+    const topRankers = topRankersByCert[cert.id] || [];
+    const rankersLine = topRankers.length
+      ? `<p class="ticket-rankers">${topRankers.map((r, i) => `${RANK_MEDALS[i] || ""}${escapeHtml(r.nickname)}`).join(" ")}</p>`
+      : "";
     return `
       <a class="ticket" href="${escapeHtml(cert.path)}">
         ${stampRing(pct, pct >= 100)}
         <div class="ticket-body">
           <p class="ticket-name">${escapeHtml(cert.name)}</p>
           <p class="ticket-subtitle">${metaLine}</p>
+          ${rankersLine}
           <p class="ticket-cta">${pct > 0 ? "이어서 학습 →" : "학습 시작 →"}</p>
         </div>
       </a>`;
