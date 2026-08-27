@@ -66,10 +66,14 @@ async function renderHub(session) {
   }).join("");
 
   root.innerHTML = `
+    <header class="hub-topbar">
+      <div class="wrap">
+        <span class="hub-mark">자격증</span><span class="hub-mark-sub">학습노트</span>
+      </div>
+    </header>
     <div class="wrap">
       <header class="hub-header">
         <p class="eyebrow">Study Ledger</p>
-        <h1 class="hub-title serif">자격증 학습노트</h1>
         <p class="hub-desc">기록은 이 계정에 저장되어, 어떤 기기·브라우저에서 로그인해도 이어서 학습할 수 있어요.</p>
         <div class="hub-user-row">
           <span>로그인: <span class="email">${escapeHtml(user.email)}</span></span>
@@ -95,9 +99,13 @@ async function renderHub(session) {
 
 function renderLogin(statusMsg, statusType) {
   root.innerHTML = `
+    <header class="hub-topbar">
+      <div class="wrap">
+        <span class="hub-mark">자격증</span><span class="hub-mark-sub">학습노트</span>
+      </div>
+    </header>
     <div class="login-screen">
       <div class="login-card">
-        <div class="login-seal">學</div>
         <h1 class="login-title">자격증 학습노트</h1>
         <p class="login-desc">이메일로 로그인 링크를 보내드려요.<br>비밀번호 없이 링크만 누르면 바로 접속돼요.</p>
         <form id="loginForm">

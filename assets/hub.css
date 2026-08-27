@@ -28,6 +28,23 @@ body{
 
 .wrap{max-width:640px;margin:0 auto;padding:0 18px;}
 
+/* ---------- 상단 브랜드 바: 자격증 페이지(header.top)와 동일한 톤으로 통일 ---------- */
+.hub-topbar{
+  background:var(--deep);
+  border-bottom:4px solid var(--amber);
+  padding:14px 0;
+}
+.hub-topbar .wrap{display:flex;align-items:baseline;gap:8px;}
+.hub-mark{
+  background:var(--amber);
+  color:var(--deep);
+  font-weight:800;
+  font-size:1.05rem;
+  padding:3px 10px;
+  border-radius:6px;
+}
+.hub-mark-sub{color:#dce9e2;font-weight:700;font-size:1rem;}
+
 /* ---------- header ---------- */
 .hub-header{
   padding:36px 0 22px;
