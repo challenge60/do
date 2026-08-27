@@ -264,9 +264,16 @@ function renderLogin(statusMsg, statusType) {
     status.textContent = "링크를 보내는 중...";
     status.className = "login-status";
     try {
+      // 로그인 링크는 이메일 앱의 보안 스캐너가 미리 열어봐서 미리 소모돼버리는 경우가 흔하다.
+      // 그걸 막기 위해 링크를 눌러도 즉시 로그인되지 않고, 대신 이 페이지의 확인 버튼을 눌러야만
+      // 실제로 로그인이 완료되는 방식(token_hash + 명시적 클릭)을 쓴다. 그래서 emailRedirectTo는
+      // next 파라미터 없이 순수 기본 경로만 넘기고, next는 따로 세션스토리지에 보관해둔다.
+      const next = new URLSearchParams(window.location.search).get("next");
+      if (next) sessionStorage.setItem("loginNext", next);
+      else sessionStorage.removeItem("loginNext");
       const { error } = await supabaseClient.auth.signInWithOtp({
         email,
-        options: { emailRedirectTo: window.location.href.split("#")[0] },
+        options: { emailRedirectTo: window.location.origin + window.location.pathname },
       });
       if (error) throw error;
       status.textContent = `${email} 주소로 로그인 링크를 보냈어요. 메일함을 확인해주세요.`;
@@ -279,8 +286,8 @@ function renderLogin(statusMsg, statusType) {
   });
 }
 
-function nextCertPath() {
-  const next = new URLSearchParams(window.location.search).get("next");
+function nextCertPath(explicitNext) {
+  const next = explicitNext !== undefined ? explicitNext : new URLSearchParams(window.location.search).get("next");
   if (!next) return null;
   const cert = CERTS_REGISTRY.find((c) => c.id === next);
   return cert ? cert.path : null;
@@ -293,6 +300,65 @@ function goToNextIfAny() {
     return true;
   }
   return false;
+}
+
+// ============ 로그인 링크 "확인 클릭"으로 완료하기 ============
+// 이메일 클라이언트/보안 스캐너가 링크를 미리 열어봐서 원-타임 토큰을 먼저 소모해버리면
+// 정작 사용자가 눌렀을 때는 '만료됨' 오류가 뜨는 문제가 자주 발생한다(Gmail, Outlook 등에서
+// 흔히 보고되는 현상). 이를 막기 위해 이메일의 링크는 곧바로 로그인시키지 않고, 이 페이지에서
+// "로그인 완료하기" 버튼을 사람이 직접 눌러야만 실제 토큰 소모(verifyOtp)가 일어나도록 만든다.
+// 스캐너는 페이지를 열어만 볼 뿐 버튼을 누르지 않으므로 토큰이 보존된다.
+// ※ 이 기능이 동작하려면 Supabase 대시보드의 매직 링크 이메일 템플릿도 함께 바꿔야 한다.
+//   (docs/PROJECT_GUIDE.md 참고)
+function getTokenHashParams() {
+  const params = new URLSearchParams(window.location.search);
+  const token_hash = params.get("token_hash");
+  const type = params.get("type");
+  if (token_hash && type) return { token_hash, type };
+  return null;
+}
+
+function renderConfirm(tokenHashParams) {
+  root.innerHTML = `
+    <header class="hub-topbar">
+      <div class="wrap">
+        <span class="hub-mark">My도전</span><span class="hub-mark-sub">자격증 학습노트</span>
+      </div>
+    </header>
+    <div class="login-screen">
+      <div class="login-card">
+        <h1 class="login-title">로그인 계속하기</h1>
+        <p class="login-desc">이메일 링크를 눌러 여기까지 오셨어요.<br>아래 버튼을 한 번 더 눌러야 로그인이 완료돼요.<br>(이메일 앱이 미리 열어봐서 토큰이 먼저 소모되는 걸 막기 위한 절차예요)</p>
+        <button type="button" class="login-btn" id="confirmLoginBtn">로그인 완료하기</button>
+        <p class="login-status" id="confirmStatus"></p>
+      </div>
+    </div>`;
+
+  document.getElementById("confirmLoginBtn").addEventListener("click", async () => {
+    const btn = document.getElementById("confirmLoginBtn");
+    const status = document.getElementById("confirmStatus");
+    btn.disabled = true;
+    status.textContent = "로그인 처리 중...";
+    status.className = "login-status";
+    const { error } = await supabaseClient.auth.verifyOtp(tokenHashParams);
+    const pendingNext = sessionStorage.getItem("loginNext");
+    sessionStorage.removeItem("loginNext");
+    if (error) {
+      history.replaceState(null, "", window.location.pathname);
+      status.textContent = "로그인 링크가 만료됐거나 이미 사용됐어요. 아래에서 새로 요청해주세요.";
+      status.className = "login-status err";
+      btn.disabled = false;
+      setTimeout(() => renderLogin(status.textContent, "err"), 1500);
+      return;
+    }
+    const path = nextCertPath(pendingNext);
+    if (path) {
+      window.location.href = path;
+    } else {
+      history.replaceState(null, "", window.location.pathname);
+      // 세션이 생겼으므로 아래 onAuthStateChange(SIGNED_IN)가 자동으로 목록 화면을 그려준다
+    }
+  });
 }
 
 // Supabase가 매직링크 오류 시 URL 해시에 실어 보내는 정보(#error=access_denied&error_code=otp_expired...)를
@@ -313,6 +379,11 @@ function parseAuthErrorFromUrl() {
 }
 
 async function boot() {
+  const tokenHashParams = getTokenHashParams();
+  if (tokenHashParams) {
+    renderConfirm(tokenHashParams);
+    return;
+  }
   const authError = parseAuthErrorFromUrl();
   const { data: { session } } = await supabaseClient.auth.getSession();
   if (session) {
