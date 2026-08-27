@@ -1,0 +1,31 @@
+{
+  "certs": [
+    {
+      "id": "arch-siljak",
+      "mark": "건축기사",
+      "sub": "실기 필답 노트",
+      "titleText": "건축기사 실기 필답 노트",
+      "count": 1792,
+      "yearRange": "2004–2026",
+      "standaloneRepo": "a"
+    },
+    {
+      "id": "waterproof-siljak",
+      "mark": "방수산업기사",
+      "sub": "실기 필답 노트",
+      "titleText": "방수산업기사 실기 필답 노트",
+      "count": 159,
+      "yearRange": "2004–2026",
+      "standaloneRepo": "b"
+    },
+    {
+      "id": "safety-siljak",
+      "mark": "산업안전기사",
+      "sub": "필답형 노트",
+      "titleText": "산업안전기사 필답형 노트",
+      "count": 778,
+      "yearRange": "2004–2026",
+      "standaloneRepo": "c"
+    }
+  ]
+}
