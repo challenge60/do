@@ -323,9 +323,9 @@ function renderLogin(statusMsg, statusType, mode) {
             : "가입하신 이메일과 비밀번호로 로그인하세요."
         }</p>
         <form id="authForm">
-          <input type="email" class="login-input" id="emailInput" placeholder="you@example.com" required autocomplete="email">
-          <input type="password" class="login-input" id="passwordInput" placeholder="비밀번호 (6자 이상)" required minlength="6" autocomplete="${isSignup ? "new-password" : "current-password"}">
-          ${isSignup ? `<input type="password" class="login-input" id="passwordConfirmInput" placeholder="비밀번호 확인" required minlength="6" autocomplete="new-password">` : ""}
+          <input type="email" class="login-input" id="emailInput" placeholder="you@example.com" required autocomplete="email" autocapitalize="off" autocorrect="off" spellcheck="false">
+          <input type="password" class="login-input" id="passwordInput" placeholder="비밀번호 (6자 이상)" required minlength="6" autocomplete="${isSignup ? "new-password" : "current-password"}" autocapitalize="off" autocorrect="off" spellcheck="false">
+          ${isSignup ? `<input type="password" class="login-input" id="passwordConfirmInput" placeholder="비밀번호 확인" required minlength="6" autocomplete="new-password" autocapitalize="off" autocorrect="off" spellcheck="false">` : ""}
           <button type="submit" class="login-btn" id="authBtn">${isSignup ? "가입하고 인증 메일 받기" : "로그인"}</button>
         </form>
         <p class="login-status ${statusType || ""}" id="loginStatus">${statusMsg || ""}</p>
