@@ -98,7 +98,7 @@ try{
             deferredPrompt = null;
             if(btn){ btn.style.display = 'none'; btn.disabled = false; }
           } else {
-            alert('브라우저 메뉴(⋮) → "홈 화면에 추가" 또는 "앱 설치"를 눌러도 똑같이 설치할 수 있어요.');
+            alert('이미 이 사이트의 다른 자격증 앱을 설치하셨다면, 크롬이 "이미 설치된 앱의 일부"로 인식해서 자동 설치 팝업을 안 띄운 것일 수 있어요.\n\n→ 브라우저 메뉴(⋮) → "홈 화면에 추가" 또는 "앱 설치"를 눌러 수동으로 설치해보세요.\n\n팁: My도전 허브(범위가 가장 넓음)는 다른 자격증들을 먼저 설치한 뒤 맨 마지막에 설치하시면 이 문제를 피할 수 있어요.');
           }
         };
         window.addEventListener('appinstalled', function(){
@@ -233,7 +233,9 @@ async function renderHub(session) {
   bindHubInstallBtn();
 }
 
-function renderLogin(statusMsg, statusType) {
+function renderLogin(statusMsg, statusType, mode) {
+  mode = mode === "signup" ? "signup" : "login";
+  const isSignup = mode === "signup";
   root.innerHTML = `
     <header class="hub-topbar">
       <div class="wrap">
@@ -244,44 +246,79 @@ function renderLogin(statusMsg, statusType) {
     <div class="login-screen">
       <div class="login-card">
         <h1 class="login-title">My도전 자격증 학습노트</h1>
-        <p class="login-desc">이메일로 로그인 링크를 보내드려요.<br>비밀번호 없이 링크만 누르면 바로 접속돼요.</p>
-        <form id="loginForm">
+        <div class="login-mode-tabs">
+          <button type="button" class="login-mode-tab ${!isSignup ? "active" : ""}" data-mode="login">로그인</button>
+          <button type="button" class="login-mode-tab ${isSignup ? "active" : ""}" data-mode="signup">회원가입</button>
+        </div>
+        <p class="login-desc">${
+          isSignup
+            ? "이메일과 비밀번호로 가입해주세요.<br>최초 1회만 이메일 인증이 필요하고, 이후엔 이메일 없이 비밀번호로 바로 로그인돼요."
+            : "가입하신 이메일과 비밀번호로 로그인하세요."
+        }</p>
+        <form id="authForm">
           <input type="email" class="login-input" id="emailInput" placeholder="you@example.com" required autocomplete="email">
-          <button type="submit" class="login-btn" id="loginBtn">로그인 링크 보내기</button>
+          <input type="password" class="login-input" id="passwordInput" placeholder="비밀번호 (6자 이상)" required minlength="6" autocomplete="${isSignup ? "new-password" : "current-password"}">
+          ${isSignup ? `<input type="password" class="login-input" id="passwordConfirmInput" placeholder="비밀번호 확인" required minlength="6" autocomplete="new-password">` : ""}
+          <button type="submit" class="login-btn" id="authBtn">${isSignup ? "가입하고 인증 메일 받기" : "로그인"}</button>
         </form>
         <p class="login-status ${statusType || ""}" id="loginStatus">${statusMsg || ""}</p>
       </div>
     </div>`;
 
   bindHubInstallBtn();
-  document.getElementById("loginForm").addEventListener("submit", async (e) => {
+  document.querySelectorAll(".login-mode-tab").forEach((tabBtn) => {
+    tabBtn.addEventListener("click", () => renderLogin(null, null, tabBtn.dataset.mode));
+  });
+
+  document.getElementById("authForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const email = document.getElementById("emailInput").value.trim();
-    const btn = document.getElementById("loginBtn");
+    const password = document.getElementById("passwordInput").value;
+    const btn = document.getElementById("authBtn");
     const status = document.getElementById("loginStatus");
-    if (!email) return;
     btn.disabled = true;
-    status.textContent = "링크를 보내는 중...";
     status.className = "login-status";
-    try {
-      // 로그인 링크는 이메일 앱의 보안 스캐너가 미리 열어봐서 미리 소모돼버리는 경우가 흔하다.
-      // 그걸 막기 위해 링크를 눌러도 즉시 로그인되지 않고, 대신 이 페이지의 확인 버튼을 눌러야만
-      // 실제로 로그인이 완료되는 방식(token_hash + 명시적 클릭)을 쓴다. 그래서 emailRedirectTo는
-      // next 파라미터 없이 순수 기본 경로만 넘기고, next는 따로 세션스토리지에 보관해둔다.
-      const next = new URLSearchParams(window.location.search).get("next");
-      if (next) sessionStorage.setItem("loginNext", next);
-      else sessionStorage.removeItem("loginNext");
-      const { error } = await supabaseClient.auth.signInWithOtp({
-        email,
-        options: { emailRedirectTo: window.location.origin + window.location.pathname },
-      });
-      if (error) throw error;
-      status.textContent = `${email} 주소로 로그인 링크를 보냈어요. 메일함을 확인해주세요.`;
-      status.className = "login-status ok";
-    } catch (err) {
-      status.textContent = "링크 전송에 실패했어요: " + err.message;
-      status.className = "login-status err";
-      btn.disabled = false;
+
+    if (isSignup) {
+      const passwordConfirm = document.getElementById("passwordConfirmInput").value;
+      if (password !== passwordConfirm) {
+        status.textContent = "비밀번호가 서로 달라요.";
+        status.className = "login-status err";
+        btn.disabled = false;
+        return;
+      }
+      status.textContent = "가입 처리 중...";
+      try {
+        const { error } = await supabaseClient.auth.signUp({
+          email,
+          password,
+          options: { emailRedirectTo: window.location.origin + window.location.pathname },
+        });
+        if (error) throw error;
+        status.textContent = `${email} 주소로 인증 메일을 보냈어요. 메일함에서 인증 링크를 눌러주시면, 그 다음부턴 이메일 없이 비밀번호로 바로 로그인할 수 있어요.`;
+        status.className = "login-status ok";
+      } catch (err) {
+        status.textContent = "가입 실패: " + err.message;
+        status.className = "login-status err";
+      } finally {
+        btn.disabled = false;
+      }
+    } else {
+      status.textContent = "로그인 중...";
+      try {
+        const next = new URLSearchParams(window.location.search).get("next");
+        if (next) sessionStorage.setItem("loginNext", next);
+        const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        // 성공하면 아래 onAuthStateChange(SIGNED_IN)가 자동으로 목록 화면(또는 next 자격증)으로 이동시킴
+      } catch (err) {
+        const isBadCreds = /invalid login credentials/i.test(err.message);
+        status.textContent = isBadCreds
+          ? "이메일 또는 비밀번호가 올바르지 않아요. (가입 시 인증 이메일을 확인하셨는지도 확인해주세요)"
+          : "로그인 실패: " + err.message;
+        status.className = "login-status err";
+        btn.disabled = false;
+      }
     }
   });
 }

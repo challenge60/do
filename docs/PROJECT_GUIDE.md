@@ -179,7 +179,33 @@ select id from auth.users where email = '등록할이메일@example.com';
 
 ---
 
-## 5. 현재 상태 (기록 시점 기준)
+## 5. PWA 설치 관련 알려진 제약사항 (중요)
+
+**"허브(My도전)나 자격증 중 하나를 설치하면 나머지 설치 버튼이 안 뜨는" 현상은 우리 코드
+버그가 아니라 크롬 자체의 알려진 동작입니다.** (참고: web.dev "Build multiple Progressive
+Web Apps on the same domain")
+
+같은 origin(`challenge60.github.io`) 안에 범위(scope)가 겹치는 여러 PWA가 있을 때,
+그중 하나라도 설치되면 크롬은 그 범위에 포함되는 다른 페이지들을 "이미 설치된 앱의 일부"로
+판단해서 `beforeinstallprompt` 이벤트 자체를 더 이상 안 띄웁니다. 우리 앱들은:
+- `challenge60.github.io/do/` — 허브(My도전), scope: `/do/` (전체를 아우름)
+- `challenge60.github.io/do/certs/<id>/` — 각 자격증, scope: `/do/certs/<id>/` (허브 범위에 포함됨)
+
+이라서, 허브를 먼저 설치하면 그 안에 포함된 자격증 페이지들의 설치 배너가 억제됩니다.
+
+**해결/우회 방법 (코드로 완전히 없앨 수 없는 브라우저 제약이라 안내로 대응)**:
+1. **설치 순서 팁**: 범위가 좁은 것(자격증)부터 먼저 설치하고, 범위가 가장 넓은 허브(My도전)를
+   맨 마지막에 설치하면 이 문제를 피할 수 있음
+2. 자동 배너가 안 뜨면 **브라우저 메뉴(⋮) → "홈 화면에 추가"**로 수동 설치 시도 (자동 배너가
+   억제된 상황에서도 대부분 이 경로는 동작함)
+3. 설치 버튼 클릭 시 뜨는 안내 문구(`engine/app.js`, `assets/hub.js`의 alert 메시지)에
+   이미 이 팁이 포함되어 있음
+
+근본적으로 이 제약을 완전히 없애려면 자격증별로 서로 다른 서브도메인(예: arch.내도메인.com)을
+쓰는 방법뿐인데, 이는 GitHub Pages 무료 호스팅 범위를 벗어나 커스텀 도메인 구매·DNS 설정이
+필요한 큰 변경이라 당장은 하지 않음.
+
+## 6. 현재 상태 (기록 시점 기준)
 
 - `challenge60/do` 최신 커밋: `99c34fc` (관리자 대시보드에 원본 문제 데이터 백업 추가)
 - 관리자 계정: `smckwz@gmail.com`
@@ -192,7 +218,7 @@ select id from auth.users where email = '등록할이메일@example.com';
 
 ---
 
-## 6. GitHub 접근 관련
+## 7. GitHub 접근 관련
 
 - 이 작업들은 사용자가 대화 중 GitHub PAT(개인 액세스 토큰)를 제공하면 Claude가
   git clone/commit/push로 직접 처리하는 방식으로 진행되어 왔음
@@ -205,7 +231,7 @@ select id from auth.users where email = '등록할이메일@example.com';
 
 ---
 
-## 7. 검증 습관 (중요)
+## 8. 검증 습관 (중요)
 
 지난 세션들에서 "고쳤다"는 말만 믿고 실제 확인 없이 넘어갔다가 실제로는
 버그가 있었던 사례가 여러 번 있었습니다. 앞으로 기능을 수정할 때는:
@@ -217,7 +243,7 @@ select id from auth.users where email = '등록할이메일@example.com';
 
 ---
 
-## 8. 이 문서 관리 원칙
+## 9. 이 문서 관리 원칙
 
 **이 문서는 살아있는 문서입니다.** 새로운 기능을 추가하거나 구조를 바꿀 때마다
 Claude에게 "이것도 매뉴얼에 반영해줘"라고 요청하면, 이 문서를 최신 상태로
