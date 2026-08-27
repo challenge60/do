@@ -295,13 +295,31 @@ function goToNextIfAny() {
   return false;
 }
 
+// Supabase가 매직링크 오류 시 URL 해시에 실어 보내는 정보(#error=access_denied&error_code=otp_expired...)를
+// 읽어서 친절한 한글 안내로 바꿔준다. 원래는 아무 안내 없이 빈 화면만 보이는 문제가 있었음.
+function parseAuthErrorFromUrl() {
+  const raw = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : window.location.hash;
+  if (!raw) return null;
+  const params = new URLSearchParams(raw);
+  const error = params.get("error");
+  if (!error) return null;
+  const errorCode = params.get("error_code");
+  // 새로고침하거나 다시 방문해도 같은 오류가 재생되지 않도록 주소창의 해시를 정리
+  history.replaceState(null, "", window.location.pathname + window.location.search);
+  if (errorCode === "otp_expired") {
+    return "로그인 링크가 만료됐어요. 아래에 이메일을 다시 입력해서 새 링크를 받아주세요.";
+  }
+  return "로그인 링크가 유효하지 않아요. 아래에 이메일을 다시 입력해서 새 링크를 받아주세요.";
+}
+
 async function boot() {
+  const authError = parseAuthErrorFromUrl();
   const { data: { session } } = await supabaseClient.auth.getSession();
   if (session) {
     if (goToNextIfAny()) return;
     renderHub(session);
   } else {
-    renderLogin();
+    renderLogin(authError, authError ? "err" : undefined);
   }
 }
 
