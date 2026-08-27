@@ -22,6 +22,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const ROOT = path.resolve(__dirname, '..');
 const ENGINE_DIR = path.join(ROOT, 'engine');
@@ -31,6 +32,27 @@ const CONFIG_PATH = path.join(ROOT, 'build', 'certs.config.json');
 
 function log(msg) {
   console.log(`[build-hub] ${msg}`);
+}
+
+// ---------- 캐시 무효화(cache-busting) ----------
+// 브라우저가 assets/app.css, assets/hub.js 같은 파일을 예전 버전으로 캐시해둔 채 계속 쓰는
+// 문제를 막기 위해, HTML 안의 <link>/<script> 경로에 파일 내용 기반 해시(?v=xxxxxxxx)를 붙인다.
+// 파일 내용이 바뀌면 해시도 자동으로 바뀌므로, 사람이 버전 번호를 수동으로 올릴 필요가 없다.
+function addCacheBusting(html, htmlDir) {
+  return html.replace(
+    /(href|src)="((?:\.\.\/)*assets\/[^"?]+\.(?:css|js))(?:\?v=[a-f0-9]+)?"/g,
+    (match, attr, relPath) => {
+      const absPath = path.resolve(htmlDir, relPath);
+      let hash = "0";
+      try {
+        const buf = fs.readFileSync(absPath);
+        hash = crypto.createHash("md5").update(buf).digest("hex").slice(0, 8);
+      } catch (e) {
+        // 파일을 못 찾으면(외부 CDN 등은 애초에 이 정규식에 안 걸림) 그냥 캐시버스팅 없이 둔다
+      }
+      return `${attr}="${relPath}?v=${hash}"`;
+    }
+  );
 }
 
 function main() {
@@ -52,7 +74,7 @@ function main() {
   const template = fs.readFileSync(templatePath, 'utf8');
 
   for (const cert of config.certs) {
-    const html = template
+    let html = template
       .split('{{TITLE_TEXT}}').join(cert.titleText)
       .split('{{MARK}}').join(cert.mark)
       .split('{{SHORT_MARK}}').join(cert.shortMark || cert.mark)
@@ -65,9 +87,24 @@ function main() {
         `certs/${cert.id} 폴더가 없습니다. data.js를 먼저 추가해주세요.`
       );
     }
+    html = addCacheBusting(html, outDir);
     const outPath = path.join(outDir, 'index.html');
     fs.writeFileSync(outPath, html, 'utf8');
-    log(`certs/${cert.id}/index.html 생성 완료`);
+    log(`certs/${cert.id}/index.html 생성 완료 (캐시버스팅 적용)`);
+  }
+
+  // 3) 허브 자체 정적 파일(index.html, admin.html)도 캐시버스팅 적용
+  //    (이 파일들은 engine 템플릿 대상이 아니라 직접 편집하는 파일이라, 내용은 안 건드리고
+  //     assets/*.css, assets/*.js 참조 경로에 해시만 갱신한다)
+  for (const staticFile of ['index.html', 'admin.html']) {
+    const filePath = path.join(ROOT, staticFile);
+    if (!fs.existsSync(filePath)) continue;
+    const original = fs.readFileSync(filePath, 'utf8');
+    const updated = addCacheBusting(original, ROOT);
+    if (updated !== original) {
+      fs.writeFileSync(filePath, updated, 'utf8');
+      log(`${staticFile} 캐시버스팅 갱신`);
+    }
   }
 
   log('허브 빌드 완료. git status로 변경사항을 확인한 뒤 커밋/푸시하세요.');
