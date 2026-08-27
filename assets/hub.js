@@ -231,6 +231,43 @@ function openNicknameModal(currentNickname, onSaved) {
   });
 }
 
+function openPasswordChangeModal() {
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="modal-card">
+      <h2 class="modal-title">비밀번호 변경</h2>
+      <p class="modal-desc">새 비밀번호를 입력해주세요. 이 계정으로 로그인된 상태라 기존 비밀번호 확인 없이 바로 바꿀 수 있어요.</p>
+      <input type="password" class="login-input" id="newPasswordInput" placeholder="새 비밀번호 (6자 이상)" minlength="6" autocomplete="new-password" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <input type="password" class="login-input" id="newPasswordConfirmInput" placeholder="새 비밀번호 확인" minlength="6" autocomplete="new-password" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <p class="login-status err" id="passwordChangeStatus" style="min-height:auto;"></p>
+      <div class="modal-actions">
+        <button type="button" class="logout-btn" id="passwordChangeCancelBtn">취소</button>
+        <button type="button" class="login-btn" id="passwordChangeSaveBtn" style="width:auto;padding:10px 18px;">변경</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const close = () => overlay.remove();
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+  document.getElementById("passwordChangeCancelBtn").addEventListener("click", close);
+  document.getElementById("passwordChangeSaveBtn").addEventListener("click", async () => {
+    const pw = document.getElementById("newPasswordInput").value;
+    const pwConfirm = document.getElementById("newPasswordConfirmInput").value;
+    const status = document.getElementById("passwordChangeStatus");
+    const btn = document.getElementById("passwordChangeSaveBtn");
+    if (pw.length < 6) { status.textContent = "6자 이상 입력해주세요."; return; }
+    if (pw !== pwConfirm) { status.textContent = "두 비밀번호가 서로 달라요."; return; }
+    btn.disabled = true;
+    const { error } = await supabaseClient.auth.updateUser({ password: pw });
+    btn.disabled = false;
+    if (error) { status.textContent = "변경 실패: " + error.message; return; }
+    close();
+    alert("비밀번호가 변경됐어요. 다음 로그인부터 새 비밀번호를 사용해주세요.");
+  });
+}
+
+
 async function renderHub(session) {
   const user = session.user;
   const [progressMap, isAdmin, nickname] = await Promise.all([
@@ -271,6 +308,7 @@ async function renderHub(session) {
             ${nickname
               ? ` · 닉네임: <b>${escapeHtml(nickname)}</b> <button type="button" class="nickname-edit-link" id="nicknameEditBtn">변경</button>`
               : ` · <button type="button" class="nickname-edit-link" id="nicknameEditBtn">🙋 닉네임 설정하기</button>`}
+            · <button type="button" class="nickname-edit-link" id="passwordChangeBtn">🔑 비밀번호 변경</button>
           </span>
           <div class="hub-user-actions">
             <a class="admin-link-btn" href="ranking.html" style="background:var(--teal);">🏆 랭킹</a>
@@ -293,6 +331,9 @@ async function renderHub(session) {
 
   document.getElementById("logoutBtn").addEventListener("click", async () => {
     await supabaseClient.auth.signOut();
+  });
+  document.getElementById("passwordChangeBtn").addEventListener("click", () => {
+    openPasswordChangeModal();
   });
   document.getElementById("nicknameEditBtn").addEventListener("click", () => {
     openNicknameModal(nickname, () => renderHub(session));
@@ -394,10 +435,22 @@ function renderLogin(statusMsg, statusType, mode) {
         // 로그인 세션이 생기므로 바로 저장 가능; 켜져 있는 경우엔 세션이 아직 없어 저장을
         // 건너뛰고, 이메일 인증 링크를 누른 뒤 처음 로그인할 때 다시 물어보는 게 안전함)
         if (data.session) {
-          await supabaseClient.from("profiles").upsert(
+          const { error: profileError } = await supabaseClient.from("profiles").upsert(
             { user_id: data.user.id, nickname, interested_certs: interestedCerts, updated_at: new Date().toISOString() },
             { onConflict: "user_id" }
           );
+          if (profileError) {
+            // 계정 자체는 이미 만들어졌고 로그인도 된 상태 — 닉네임만 다시 정하면 되므로
+            // 회원가입을 처음부터 다시 시키지 않고, 그 자리에서 바로 닉네임 재입력 모달을 띄운다.
+            const isDup = /duplicate|unique/i.test(profileError.message);
+            status.textContent = isDup
+              ? "가입은 완료됐는데, 그 닉네임은 이미 다른 사람이 쓰고 있어요. 아래에서 다른 닉네임으로 다시 설정해주세요."
+              : "가입은 완료됐지만 닉네임 저장에 실패했어요: " + profileError.message;
+            status.className = "login-status err";
+            btn.disabled = false;
+            openNicknameModal(null, () => { window.location.reload(); });
+            return;
+          }
           status.textContent = "가입 완료! 잠시 후 자동으로 이동해요.";
           status.className = "login-status ok";
           // 아래 onAuthStateChange(SIGNED_IN)가 자동으로 목록 화면(또는 next 자격증)으로 이동시킴
