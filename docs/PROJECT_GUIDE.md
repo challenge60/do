@@ -205,9 +205,33 @@ Web Apps on the same domain")
 쓰는 방법뿐인데, 이는 GitHub Pages 무료 호스팅 범위를 벗어나 커스텀 도메인 구매·DNS 설정이
 필요한 큰 변경이라 당장은 하지 않음.
 
-## 6. 현재 상태 (기록 시점 기준)
+## 6. 닉네임 · 학습 랭킹 · 오답의견
 
-- `challenge60/do` 최신 커밋: `99c34fc` (관리자 대시보드에 원본 문제 데이터 백업 추가)
+### 닉네임 (profiles 테이블)
+- 이메일은 절대 공개되지 않고, 랭킹/오답의견에는 **닉네임**만 표시됨
+- 허브 로그인 후 사용자 정보 줄의 "닉네임 설정하기"에서 등록 (2자 이상, 중복 불가)
+- 닉네임을 등록해야 랭킹에 집계됨 (안 하면 랭킹 미참여)
+
+### 학습 랭킹 (ranking.html)
+- 3개 자격증을 합산한 지표: **풀이수 / 정답률 / 진도율 / 종합점수** 4개 탭
+- 종합점수 = 진도율 50% + 정답률 50%
+- `get_rankings()` RPC가 `user_progress.data`(jsonb)에서 `progress`(진도), `solvedTotal`,
+  `correctTotal`을 집계함. 진도율 계산에 쓰이는 전체 문항수는 `cert_meta` 테이블에 있음
+  — **새 자격증을 추가하거나 문항수가 바뀌면 `cert_meta`도 같이 갱신해야 함**:
+  ```sql
+  insert into public.cert_meta (cert_id, question_count) values ('새자격증id', 문항수)
+  on conflict (cert_id) do update set question_count = excluded.question_count;
+  ```
+
+### 오답의견 (question_comments 테이블)
+- 문제 화면 툴바의 💬 아이콘 → 그 문제를 보는 모든 로그인 사용자에게 공개되는 댓글판
+- 누구나 읽기 가능, 본인 글만 삭제 가능(관리자는 전체 삭제 가능 — 부적절한 글 관리용)
+- **허브(do)에서만 동작.** standalone(a/b/c)은 Supabase가 없어서 💬 아이콘 자체가 안 보임
+  (`engine/app.js`에서 `typeof supabaseClient !== "undefined"`로 자동 분기됨, 별도 처리 불필요)
+
+## 7. 현재 상태 (기록 시점 기준)
+
+- `challenge60/do` 최신 커밋: `afd4632` (닉네임·랭킹·오답의견 추가)
 - 관리자 계정: `smckwz@gmail.com`
 - 이전에 있었던 중대 버그(모두 수정 완료):
   - `app.css` 맨 앞에 문자열 `<style>`이 잘못 남아 있어 전체 CSS 변수가 무효화되던 문제
@@ -218,7 +242,7 @@ Web Apps on the same domain")
 
 ---
 
-## 7. GitHub 접근 관련
+## 8. GitHub 접근 관련
 
 - 이 작업들은 사용자가 대화 중 GitHub PAT(개인 액세스 토큰)를 제공하면 Claude가
   git clone/commit/push로 직접 처리하는 방식으로 진행되어 왔음
@@ -231,7 +255,7 @@ Web Apps on the same domain")
 
 ---
 
-## 8. 검증 습관 (중요)
+## 9. 검증 습관 (중요)
 
 지난 세션들에서 "고쳤다"는 말만 믿고 실제 확인 없이 넘어갔다가 실제로는
 버그가 있었던 사례가 여러 번 있었습니다. 앞으로 기능을 수정할 때는:
@@ -243,7 +267,7 @@ Web Apps on the same domain")
 
 ---
 
-## 9. 이 문서 관리 원칙
+## 10. 이 문서 관리 원칙
 
 **이 문서는 살아있는 문서입니다.** 새로운 기능을 추가하거나 구조를 바꿀 때마다
 Claude에게 "이것도 매뉴얼에 반영해줘"라고 요청하면, 이 문서를 최신 상태로
