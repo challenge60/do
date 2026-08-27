@@ -46,9 +46,27 @@ function computeStats(certProgress, questionCount) {
   return { solved, pct, acc };
 }
 
+async function checkIsAdmin(userId) {
+  try {
+    const { data, error } = await supabaseClient
+      .from("admins")
+      .select("user_id")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (error) throw error;
+    return !!data;
+  } catch (e) {
+    console.warn("관리자 여부 확인 실패:", e.message);
+    return false;
+  }
+}
+
 async function renderHub(session) {
   const user = session.user;
-  const progressMap = await fetchProgressMap(user.id);
+  const [progressMap, isAdmin] = await Promise.all([
+    fetchProgressMap(user.id),
+    checkIsAdmin(user.id),
+  ]);
 
   const cards = CERTS_REGISTRY.map((cert) => {
     const { solved, pct, acc } = computeStats(progressMap[cert.id], cert.questionCount);
@@ -77,7 +95,10 @@ async function renderHub(session) {
         <p class="hub-desc">기록은 이 계정에 저장되어, 어떤 기기·브라우저에서 로그인해도 이어서 학습할 수 있어요.</p>
         <div class="hub-user-row">
           <span>로그인: <span class="email">${escapeHtml(user.email)}</span></span>
-          <button class="logout-btn" id="logoutBtn">로그아웃</button>
+          <div class="hub-user-actions">
+            ${isAdmin ? `<a class="admin-link-btn" href="admin.html">🛠 관리자</a>` : ""}
+            <button class="logout-btn" id="logoutBtn">로그아웃</button>
+          </div>
         </div>
       </header>
       <div class="cert-grid">

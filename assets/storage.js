@@ -81,6 +81,75 @@
     }
   }
 
+  // ---------- 관리자 수정 오버레이 (전체 사용자 공용) ----------
+  // 로그인한 사용자라면 누구나 읽을 수 있음(RLS: authenticated select true).
+  // 이 문제를 개인적으로 수정한 적 없는 사용자에게만 화면에 반영됨 (app.js의 withEdits()에서 우선순위 처리).
+  async function loadAdminOverrides() {
+    try {
+      const { data, error } = await supabaseClient
+        .from("question_overrides")
+        .select("question_id,question,answer,images,tags,unit_major,unit_minor")
+        .eq("cert_id", CERT_ID);
+      if (error) throw error;
+      const map = {};
+      (data || []).forEach((row) => {
+        map[row.question_id] = {
+          question: row.question,
+          answer: row.answer,
+          images: row.images,
+          tags: row.tags,
+          unitMajor: row.unit_major,
+          unitMinor: row.unit_minor,
+        };
+      });
+      window.adminOverrides = map;
+    } catch (e) {
+      console.warn("관리자 수정사항을 불러오지 못했어요:", e.message);
+      window.adminOverrides = {};
+    }
+  }
+
+  // ---------- 관리자 여부 확인 ----------
+  async function checkIsAdmin(userId) {
+    try {
+      const { data, error } = await supabaseClient
+        .from("admins")
+        .select("user_id")
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (error) throw error;
+      return !!data;
+    } catch (e) {
+      console.warn("관리자 여부 확인 실패:", e.message);
+      return false;
+    }
+  }
+
+  // ---------- 관리자 전용: 문제 수정사항을 전체 사용자 기본값으로 발행 ----------
+  window.publishAdminOverride = async function (questionId, payload) {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (!session) throw new Error("로그인이 필요합니다");
+    const { error } = await supabaseClient.from("question_overrides").upsert(
+      {
+        cert_id: CERT_ID,
+        question_id: questionId,
+        question: payload.question,
+        answer: payload.answer,
+        images: payload.images,
+        tags: payload.tags,
+        unit_major: payload.unitMajor,
+        unit_minor: payload.unitMinor,
+        updated_at: new Date().toISOString(),
+        updated_by: session.user.id,
+      },
+      { onConflict: "cert_id,question_id" }
+    );
+    if (error) throw error;
+    // 방금 발행한 내용을 즉시 로컬 오버레이에도 반영 (재접속 없이 바로 확인 가능하도록)
+    if (!window.adminOverrides) window.adminOverrides = {};
+    window.adminOverrides[questionId] = { ...payload };
+  };
+
   async function init() {
     const { data: { session } } = await supabaseClient.auth.getSession();
     if (!session) {
@@ -88,6 +157,10 @@
       return;
     }
     const userId = session.user.id;
+
+    // 0) 관리자 수정 오버레이를 먼저 불러와 둔다 (모든 로그인 사용자 대상)
+    await loadAdminOverrides();
+    window.isAdmin = await checkIsAdmin(userId);
 
     // 1) 클라우드 기록 반영 (있으면 로컬보다 우선 — 다른 기기에서 이어 학습하는 경우 대비)
     const cloud = await pullFromCloud(userId);
@@ -103,6 +176,7 @@
       // 이 자격증은 이 계정으로 처음 여는 것 → 지금 로컬(비어있거나 이전 게스트 기록)을 클라우드에 올림
       pushToCloud(userId);
     }
+    if (typeof render === "function") render(); // adminOverrides 반영을 위해 한 번 더 갱신
 
     // 2) 이후 저장(saveStore)마다 클라우드에도 반영
     const originalSaveStore = saveStore;

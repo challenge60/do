@@ -1,0 +1,90 @@
+/* 관리자 대시보드 전용 스타일 — hub.css의 색상 토큰(--deep, --amber, --teal 등)을 그대로 사용 */
+
+.admin-wrap{
+  max-width:960px;
+  margin:0 auto;
+  padding:20px 16px 60px;
+}
+.admin-back{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  font-size:13px;
+  color:var(--muted);
+  text-decoration:none;
+  margin-bottom:14px;
+}
+.admin-back:hover{color:var(--ink);}
+.admin-title{
+  font-size:22px;
+  font-weight:800;
+  color:var(--ink);
+  margin:0 0 4px;
+}
+.admin-sub{
+  font-size:13px;
+  color:var(--muted);
+  margin:0 0 22px;
+}
+.admin-summary-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(140px, 1fr));
+  gap:10px;
+  margin-bottom:26px;
+}
+.admin-summary-card{
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:14px;
+  padding:14px 16px;
+}
+.admin-summary-card .num{
+  font-size:22px;
+  font-weight:800;
+  color:var(--deep);
+  font-family:"IBM Plex Mono", monospace;
+}
+.admin-summary-card .label{
+  font-size:12px;
+  color:var(--muted);
+  margin-top:2px;
+}
+.admin-section-title{
+  font-size:15px;
+  font-weight:700;
+  color:var(--ink);
+  margin:26px 0 10px;
+}
+.admin-table-wrap{
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:14px;
+  overflow-x:auto;
+}
+.admin-table{
+  width:100%;
+  border-collapse:collapse;
+  font-size:12.5px;
+  white-space:nowrap;
+}
+.admin-table th, .admin-table td{
+  padding:9px 12px;
+  text-align:left;
+  border-bottom:1px solid var(--line);
+}
+.admin-table th{
+  color:var(--muted);
+  font-weight:600;
+  background:rgba(0,0,0,0.02);
+  position:sticky;
+  top:0;
+}
+.admin-table tr:last-child td{border-bottom:none;}
+.admin-table td.num{font-family:"IBM Plex Mono", monospace;}
+.admin-empty, .admin-loading, .admin-denied{
+  padding:40px 20px;
+  text-align:center;
+  color:var(--muted);
+  font-size:13.5px;
+}
+.admin-denied{color:var(--rose, #c0392b);}
