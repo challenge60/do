@@ -8,6 +8,119 @@ function escapeHtml(s) {
   }[c]));
 }
 
+/* ============ PWA 설치("My도전" 허브 자체를 홈 화면 앱으로) ============
+   각 자격증 페이지(engine/app.js)와 완전히 별개의 PWA로 설치되도록, id/scope를
+   허브 경로("/") 기준으로 잡는다. 자격증별 앱과 이름·아이콘이 겹치지 않는다. */
+try{
+  (function(){
+    function buildHubIcon(size){
+      const c = document.createElement('canvas');
+      c.width = size; c.height = size;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#0f3d3e';
+      ctx.fillRect(0, 0, size, size);
+      ctx.fillStyle = '#d98e3f';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = 'bold ' + Math.round(size * 0.22) + 'px sans-serif';
+      ctx.fillText('My도전', size / 2, size * 0.42);
+      ctx.font = 'bold ' + Math.round(size * 0.13) + 'px sans-serif';
+      ctx.fillStyle = '#f4ede0';
+      ctx.fillText('학습노트', size / 2, size * 0.66);
+      return c.toDataURL('image/png');
+    }
+
+    try{
+      const icon192 = buildHubIcon(192);
+      const icon512 = buildHubIcon(512);
+      const manifest = {
+        id: location.pathname.replace(/[^/]*$/, ''),
+        name: "My도전 자격증 학습노트",
+        short_name: "My도전",
+        start_url: location.origin + location.pathname,
+        scope: location.origin + location.pathname.replace(/[^/]*$/, ''),
+        display: "standalone",
+        orientation: "portrait",
+        background_color: "#faf7f0",
+        theme_color: "#243c3d",
+        icons: [
+          { src: icon192, sizes: "192x192", type: "image/png" },
+          { src: icon512, sizes: "512x512", type: "image/png" },
+          { src: icon512, sizes: "512x512", type: "image/png", purpose: "maskable" },
+        ],
+      };
+      const manifestBlob = new Blob([JSON.stringify(manifest)], { type: "application/manifest+json" });
+      let manifestLink = document.querySelector('link[rel="manifest"]');
+      if(!manifestLink){
+        manifestLink = document.createElement('link');
+        manifestLink.rel = 'manifest';
+        document.head.appendChild(manifestLink);
+      }
+      manifestLink.href = URL.createObjectURL(manifestBlob);
+    }catch(e){ /* 매니페스트 생성 실패 시 무시 */ }
+
+    if('serviceWorker' in navigator){
+      try{
+        const swCode = "self.addEventListener('install',e=>self.skipWaiting());" +
+                       "self.addEventListener('activate',e=>self.clients.claim());" +
+                       "self.addEventListener('fetch',e=>{});";
+        const swBlob = new Blob([swCode], { type: 'application/javascript' });
+        navigator.serviceWorker.register(URL.createObjectURL(swBlob)).catch(()=>{});
+      }catch(e){}
+    }
+
+    let isStandalone, isIOS, deferredPrompt = null;
+    try {
+      isStandalone = (typeof window.matchMedia === 'function' && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+      isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    } catch(e) { isStandalone = true; isIOS = false; }
+
+    window.__hubPwa = { isStandalone, isIOS };
+
+    if(!isStandalone){
+      if(isIOS){
+        window.__hubPwa.onInstallClick = function(){
+          alert('Safari 하단 공유 버튼(⬆️)을 누른 뒤\n"홈 화면에 추가"를 선택하면 앱처럼 설치돼요.');
+        };
+      } else {
+        window.addEventListener('beforeinstallprompt', function(e){
+          e.preventDefault();
+          deferredPrompt = e;
+          const btn = document.getElementById('hubInstallBtn');
+          if(btn) btn.style.display = 'inline-flex';
+        });
+        window.__hubPwa.onInstallClick = async function(){
+          const btn = document.getElementById('hubInstallBtn');
+          if(deferredPrompt){
+            if(btn) btn.disabled = true;
+            deferredPrompt.prompt();
+            try{ await deferredPrompt.userChoice; }catch(e){}
+            deferredPrompt = null;
+            if(btn){ btn.style.display = 'none'; btn.disabled = false; }
+          } else {
+            alert('브라우저 메뉴(⋮) → "홈 화면에 추가" 또는 "앱 설치"를 눌러도 똑같이 설치할 수 있어요.');
+          }
+        };
+        window.addEventListener('appinstalled', function(){
+          const btn = document.getElementById('hubInstallBtn');
+          if(btn) btn.style.display = 'none';
+          deferredPrompt = null;
+        });
+      }
+    }
+  })();
+}catch(e){ console.warn("허브 PWA 설치 기능 초기화 실패:", e); }
+
+function bindHubInstallBtn(){
+  const btn = document.getElementById('hubInstallBtn');
+  if(!btn || !window.__hubPwa || window.__hubPwa.isStandalone) return;
+  btn.style.display = 'inline-flex';
+  if(window.__hubPwa.isIOS) btn.textContent = '📲 홈 화면에 추가';
+  btn.addEventListener('click', () => { if(window.__hubPwa.onInstallClick) window.__hubPwa.onInstallClick(); });
+  // beforeinstallprompt가 안 와도(다른 자격증을 먼저 설치해 크롬이 잠시 억제 중인 경우 등) 버튼은 보여준다
+  setTimeout(() => { if(btn.style.display !== 'none') btn.style.display = 'inline-flex'; }, 2500);
+}
+
 function stampRing(pct, done) {
   const r = 24, c = 2 * Math.PI * r;
   const offset = c - (Math.min(100, Math.max(0, pct)) / 100) * c;
@@ -87,6 +200,7 @@ async function renderHub(session) {
     <header class="hub-topbar">
       <div class="wrap">
         <span class="hub-mark">My도전</span><span class="hub-mark-sub">자격증 학습노트</span>
+        <button type="button" class="hub-install-btn" id="hubInstallBtn" style="display:none;">📲 앱 설치</button>
       </div>
     </header>
     <div class="wrap">
@@ -116,6 +230,7 @@ async function renderHub(session) {
   document.getElementById("logoutBtn").addEventListener("click", async () => {
     await supabaseClient.auth.signOut();
   });
+  bindHubInstallBtn();
 }
 
 function renderLogin(statusMsg, statusType) {
@@ -123,6 +238,7 @@ function renderLogin(statusMsg, statusType) {
     <header class="hub-topbar">
       <div class="wrap">
         <span class="hub-mark">My도전</span><span class="hub-mark-sub">자격증 학습노트</span>
+        <button type="button" class="hub-install-btn" id="hubInstallBtn" style="display:none;">📲 앱 설치</button>
       </div>
     </header>
     <div class="login-screen">
@@ -137,6 +253,7 @@ function renderLogin(statusMsg, statusType) {
       </div>
     </div>`;
 
+  bindHubInstallBtn();
   document.getElementById("loginForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const email = document.getElementById("emailInput").value.trim();

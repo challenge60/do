@@ -44,6 +44,21 @@ body{
   border-radius:6px;
 }
 .hub-mark-sub{color:#dce9e2;font-weight:700;font-size:1rem;}
+.hub-install-btn{
+  margin-left:auto;
+  display:none;
+  align-items:center;
+  gap:4px;
+  background:rgba(255,255,255,0.08);
+  color:#dce9e2;
+  border:1px solid rgba(255,255,255,0.2);
+  border-radius:7px;
+  padding:5px 10px;
+  font-size:0.78rem;
+  font-weight:600;
+  cursor:pointer;
+}
+.hub-install-btn:hover{background:rgba(255,255,255,0.15);}
 
 /* ---------- header ---------- */
 .hub-header{

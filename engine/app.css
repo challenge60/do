@@ -750,8 +750,8 @@
 
   body{font-family:'IBM Plex Sans KR',-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;}
 
-  header.top{border-bottom:2px solid #e8892c;}
-  .brand .mark{background:#e8892c;color:var(--deep);border-radius:6px;font-weight:800;}
+  header.top{border-bottom:2px solid var(--amber);}
+  .brand .mark{background:var(--amber);color:var(--deep);border-radius:6px;font-weight:800;}
   .brand .sub{font-family:'IBM Plex Sans KR',-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;font-weight:800;}
   .page-bar h2{font-family:'IBM Plex Sans KR',-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;font-weight:800;}
 
