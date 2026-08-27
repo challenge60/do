@@ -2782,6 +2782,7 @@ function renderCard(){
         <button class="corner-emoji-btn" id="starBtn" title="즐겨찾기">☆</button>
         <button class="corner-emoji-btn" id="aiHelpBtn" title="AI 해설 보기">🤖</button>
         <button class="corner-emoji-btn" id="shareBtn" title="문제 공유하기">📤</button>
+        ${typeof supabaseClient !== "undefined" ? `<button class="corner-emoji-btn" id="commentBtn" title="오답의견">💬</button>` : ""}
         <button class="corner-emoji-btn" id="editBtn" title="수정">✏️</button>
       </div>
       <div class="card-box" id="cardBox">
@@ -2882,6 +2883,8 @@ function renderCard(){
   document.getElementById("editBtn").addEventListener("click", ()=> openEditModal(q.id, ()=> renderCard()));
   document.getElementById("aiHelpBtn").addEventListener("click", ()=> openAiHelpModal(q));
   document.getElementById("shareBtn").addEventListener("click", ()=> openShareOptionsModal(q));
+  const commentBtnEl = document.getElementById("commentBtn");
+  if(commentBtnEl) commentBtnEl.addEventListener("click", ()=> openCommentModal(q.id));
   const starDupTagBtnEl = document.getElementById("starDupTagBtn");
   if(starDupTagBtnEl) starDupTagBtnEl.addEventListener("click", ()=> openDuplicateModal(q.id));
   const voiceModeBtnEl = document.getElementById("voiceModeBtn");
@@ -3442,6 +3445,107 @@ function openAiHelpModal(q){
   overlay.querySelectorAll("[data-ai-svc-modal]").forEach(btn=>{
     btn.addEventListener("click", ()=>{ askAiAboutQuestion(btn.dataset.aiSvcModal, q); overlay.remove(); });
   });
+}
+
+/* ---- 오답의견: 문제별 공개 댓글(허브에서만 동작, standalone에는 없음) ---- */
+function escapeCommentHtml(s){
+  return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+async function openCommentModal(questionId){
+  if(typeof supabaseClient === "undefined") return;
+  document.querySelectorAll(".comment-modal-overlay").forEach(o=>o.remove());
+  const overlay = document.createElement("div");
+  overlay.className = "comment-modal-overlay";
+  overlay.innerHTML = `
+    <div class="comment-modal-card">
+      <div class="comment-modal-header">
+        <h3>💬 오답의견</h3>
+        <button type="button" class="comment-modal-close" id="commentCloseBtn">✕</button>
+      </div>
+      <p class="comment-modal-desc">이 문제를 보는 모든 사용자에게 공개돼요. 오탈자·이견·추가 설명 등을 남겨보세요.</p>
+      <div class="comment-list" id="commentList"><p class="comment-loading">불러오는 중…</p></div>
+      <div class="comment-compose">
+        <textarea id="commentInput" placeholder="의견을 입력하세요" maxlength="1000"></textarea>
+        <button type="button" id="commentSubmitBtn">등록</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.addEventListener("click", (e) => { if(e.target === overlay) close(); });
+  document.getElementById("commentCloseBtn").addEventListener("click", close);
+
+  async function loadComments(){
+    const listEl = document.getElementById("commentList");
+    if(!listEl) return;
+    listEl.innerHTML = '<p class="comment-loading">불러오는 중…</p>';
+    try{
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      const myId = session ? session.user.id : null;
+      const { data: comments, error } = await supabaseClient
+        .from("question_comments")
+        .select("id,user_id,content,created_at")
+        .eq("cert_id", typeof CERT_ID !== "undefined" ? CERT_ID : "")
+        .eq("question_id", questionId)
+        .order("created_at", { ascending: true });
+      if(error) throw error;
+      const userIds = [...new Set((comments || []).map(c => c.user_id))];
+      let nickMap = {};
+      if(userIds.length){
+        const { data: profiles } = await supabaseClient.from("profiles").select("user_id,nickname").in("user_id", userIds);
+        (profiles || []).forEach(p => { nickMap[p.user_id] = p.nickname; });
+      }
+      if(!comments || !comments.length){
+        listEl.innerHTML = '<p class="comment-empty">아직 의견이 없어요. 첫 의견을 남겨보세요.</p>';
+        return;
+      }
+      listEl.innerHTML = comments.map(c => {
+        const nick = nickMap[c.user_id] || "익명";
+        const mine = myId && c.user_id === myId;
+        const d = new Date(c.created_at);
+        const dateStr = `${d.getMonth()+1}/${d.getDate()}`;
+        return `<div class="comment-item">
+          <div class="comment-meta"><b>${escapeCommentHtml(nick)}</b><span>${dateStr}</span>${mine ? `<button type="button" class="comment-delete-btn" data-id="${c.id}">삭제</button>` : ""}</div>
+          <div class="comment-body">${escapeCommentHtml(c.content)}</div>
+        </div>`;
+      }).join("");
+      listEl.querySelectorAll(".comment-delete-btn").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          if(!confirm("이 의견을 삭제할까요?")) return;
+          await supabaseClient.from("question_comments").delete().eq("id", btn.dataset.id);
+          loadComments();
+        });
+      });
+    }catch(e){
+      listEl.innerHTML = `<p class="comment-empty">불러오기 실패: ${escapeCommentHtml(e.message)}</p>`;
+    }
+  }
+
+  document.getElementById("commentSubmitBtn").addEventListener("click", async () => {
+    const input = document.getElementById("commentInput");
+    const content = input.value.trim();
+    if(!content) return;
+    const btn = document.getElementById("commentSubmitBtn");
+    btn.disabled = true;
+    try{
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      if(!session){ alert("로그인이 필요해요."); return; }
+      const { error } = await supabaseClient.from("question_comments").insert({
+        cert_id: typeof CERT_ID !== "undefined" ? CERT_ID : "",
+        question_id: questionId,
+        user_id: session.user.id,
+        content,
+      });
+      if(error) throw error;
+      input.value = "";
+      loadComments();
+    }catch(e){
+      alert("등록 실패: " + e.message);
+    }finally{
+      btn.disabled = false;
+    }
+  });
+
+  loadComments();
 }
 
 /* ---- 문제 공유하기: 형식(이미지/텍스트) · 내용(문제만/정답포함) 선택 모달 ---- */

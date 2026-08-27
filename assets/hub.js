@@ -174,11 +174,69 @@ async function checkIsAdmin(userId) {
   }
 }
 
+async function fetchProfile(userId) {
+  try {
+    const { data, error } = await supabaseClient
+      .from("profiles")
+      .select("nickname")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? data.nickname : null;
+  } catch (e) {
+    console.warn("닉네임을 불러오지 못했습니다:", e.message);
+    return null;
+  }
+}
+
+function openNicknameModal(currentNickname, onSaved) {
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="modal-card">
+      <h2 class="modal-title">${currentNickname ? "닉네임 변경" : "닉네임 설정"}</h2>
+      <p class="modal-desc">랭킹과 오답의견에 이 닉네임으로 표시돼요. 이메일은 공개되지 않아요.</p>
+      <input type="text" class="login-input" id="nicknameInput" maxlength="20" placeholder="예: 열공하는건축가" value="${currentNickname ? escapeHtml(currentNickname) : ""}">
+      <p class="login-status err" id="nicknameStatus" style="min-height:auto;"></p>
+      <div class="modal-actions">
+        <button type="button" class="logout-btn" id="nicknameCancelBtn">취소</button>
+        <button type="button" class="login-btn" id="nicknameSaveBtn" style="width:auto;padding:10px 18px;">저장</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const close = () => overlay.remove();
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+  document.getElementById("nicknameCancelBtn").addEventListener("click", close);
+  document.getElementById("nicknameSaveBtn").addEventListener("click", async () => {
+    const input = document.getElementById("nicknameInput");
+    const status = document.getElementById("nicknameStatus");
+    const nickname = input.value.trim();
+    if (!nickname) { status.textContent = "닉네임을 입력해주세요."; return; }
+    if (nickname.length < 2) { status.textContent = "2글자 이상 입력해주세요."; return; }
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (!session) { status.textContent = "로그인이 필요해요."; return; }
+    const { error } = await supabaseClient.from("profiles").upsert(
+      { user_id: session.user.id, nickname, updated_at: new Date().toISOString() },
+      { onConflict: "user_id" }
+    );
+    if (error) {
+      status.textContent = /duplicate|unique/i.test(error.message)
+        ? "이미 다른 사람이 쓰고 있는 닉네임이에요."
+        : "저장 실패: " + error.message;
+      return;
+    }
+    close();
+    if (onSaved) onSaved(nickname);
+  });
+}
+
 async function renderHub(session) {
   const user = session.user;
-  const [progressMap, isAdmin] = await Promise.all([
+  const [progressMap, isAdmin, nickname] = await Promise.all([
     fetchProgressMap(user.id),
     checkIsAdmin(user.id),
+    fetchProfile(user.id),
   ]);
 
   const cards = CERTS_REGISTRY.map((cert) => {
@@ -208,8 +266,14 @@ async function renderHub(session) {
         <p class="eyebrow">Study Ledger</p>
         <p class="hub-desc">기록은 이 계정에 저장되어, 어떤 기기·브라우저에서 로그인해도 이어서 학습할 수 있어요.</p>
         <div class="hub-user-row">
-          <span>로그인: <span class="email">${escapeHtml(user.email)}</span></span>
+          <span>
+            로그인: <span class="email">${escapeHtml(user.email)}</span>
+            ${nickname
+              ? ` · 닉네임: <b>${escapeHtml(nickname)}</b> <button type="button" class="nickname-edit-link" id="nicknameEditBtn">변경</button>`
+              : ` · <button type="button" class="nickname-edit-link" id="nicknameEditBtn">🙋 닉네임 설정하기</button>`}
+          </span>
           <div class="hub-user-actions">
+            <a class="admin-link-btn" href="ranking.html" style="background:var(--teal);">🏆 랭킹</a>
             ${isAdmin ? `<a class="admin-link-btn" href="admin.html">🛠 관리자</a>` : ""}
             <button class="logout-btn" id="logoutBtn">로그아웃</button>
           </div>
@@ -229,6 +293,9 @@ async function renderHub(session) {
 
   document.getElementById("logoutBtn").addEventListener("click", async () => {
     await supabaseClient.auth.signOut();
+  });
+  document.getElementById("nicknameEditBtn").addEventListener("click", () => {
+    openNicknameModal(nickname, () => renderHub(session));
   });
   bindHubInstallBtn();
 }

@@ -96,7 +96,7 @@ function main() {
   // 3) 허브 자체 정적 파일(index.html, admin.html)도 캐시버스팅 적용
   //    (이 파일들은 engine 템플릿 대상이 아니라 직접 편집하는 파일이라, 내용은 안 건드리고
   //     assets/*.css, assets/*.js 참조 경로에 해시만 갱신한다)
-  for (const staticFile of ['index.html', 'admin.html']) {
+  for (const staticFile of ['index.html', 'admin.html', 'ranking.html']) {
     const filePath = path.join(ROOT, staticFile);
     if (!fs.existsSync(filePath)) continue;
     const original = fs.readFileSync(filePath, 'utf8');

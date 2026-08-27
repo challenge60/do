@@ -119,6 +119,35 @@ body{
   white-space:nowrap;
 }
 .admin-link-btn:hover{opacity:0.88;}
+.nickname-edit-link{
+  border:none;
+  background:none;
+  color:var(--teal);
+  font-weight:700;
+  font-size:12.5px;
+  text-decoration:underline;
+  cursor:pointer;
+  padding:0;
+}
+
+/* ---------- 모달 (닉네임 설정 등) ---------- */
+.modal-overlay{
+  position:fixed; inset:0;
+  background:rgba(0,0,0,0.45);
+  display:flex; align-items:center; justify-content:center;
+  z-index:1000;
+  padding:20px;
+}
+.modal-card{
+  background:#fff;
+  border-radius:16px;
+  padding:22px;
+  max-width:360px;
+  width:100%;
+}
+.modal-title{font-size:17px;font-weight:800;color:var(--deep);margin:0 0 6px;}
+.modal-desc{font-size:12.5px;color:var(--muted);margin:0 0 14px;line-height:1.5;}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:10px;}
 
 /* ---------- cert grid ---------- */
 .cert-grid{
