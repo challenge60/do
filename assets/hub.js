@@ -356,16 +356,29 @@ function renderLogin(statusMsg, statusType, mode) {
       }
       status.textContent = "가입 처리 중...";
       try {
-        const { error } = await supabaseClient.auth.signUp({
+        const { data, error } = await supabaseClient.auth.signUp({
           email,
           password,
           options: { emailRedirectTo: window.location.origin + window.location.pathname },
         });
         if (error) throw error;
-        status.textContent = `${email} 주소로 인증 메일을 보냈어요. 메일함에서 인증 링크를 눌러주시면, 그 다음부턴 이메일 없이 비밀번호로 바로 로그인할 수 있어요.`;
-        status.className = "login-status ok";
+        // Supabase의 알려진 신호: 이미 가입(인증 완료)된 이메일로 signUp을 다시 호출하면
+        // 에러 없이 성공 응답이 오지만 data.user.identities가 빈 배열로 온다(사용자 존재 여부를
+        // 외부에 노출하지 않기 위한 설계). 이 경우 실제로는 인증 메일이 발송되지 않고, 대신
+        // 방금 입력한 비밀번호가 그 기존 계정에 설정된다 — 바로 로그인하면 된다.
+        const alreadyExists = data && data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0;
+        if (alreadyExists) {
+          status.textContent = `이미 가입되어 있는 이메일이에요. 인증 메일은 따로 가지 않아요 — 방금 입력하신 비밀번호가 그 계정에 저장됐으니, "로그인" 탭에서 바로 로그인해보세요.`;
+          status.className = "login-status ok";
+        } else {
+          status.textContent = `${email} 주소로 인증 메일을 보냈어요. 메일함(스팸함도 확인!)에서 인증 링크를 눌러주시면, 그 다음부턴 이메일 없이 비밀번호로 바로 로그인할 수 있어요.`;
+          status.className = "login-status ok";
+        }
       } catch (err) {
-        status.textContent = "가입 실패: " + err.message;
+        const isRateLimit = /rate limit/i.test(err.message);
+        status.textContent = isRateLimit
+          ? "메일 발송 요청이 너무 잦아서 잠시 제한됐어요(보통 시간당 몇 통 수준). 1시간 정도 뒤에 다시 시도해주세요."
+          : "가입 실패: " + err.message;
         status.className = "login-status err";
       } finally {
         btn.disabled = false;
