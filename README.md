@@ -54,3 +54,4 @@ certs/
 3. `assets/certs-registry.js`에 새 항목 한 줄 추가
 
 app.js/app.css는 그대로 재사용되므로 새로 만들 필요 없어요.
+
