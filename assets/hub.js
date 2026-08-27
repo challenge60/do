@@ -86,7 +86,7 @@ async function renderHub(session) {
   root.innerHTML = `
     <header class="hub-topbar">
       <div class="wrap">
-        <span class="hub-mark">자격증</span><span class="hub-mark-sub">학습노트</span>
+        <span class="hub-mark">My도전</span><span class="hub-mark-sub">자격증 학습노트</span>
       </div>
     </header>
     <div class="wrap">
@@ -122,12 +122,12 @@ function renderLogin(statusMsg, statusType) {
   root.innerHTML = `
     <header class="hub-topbar">
       <div class="wrap">
-        <span class="hub-mark">자격증</span><span class="hub-mark-sub">학습노트</span>
+        <span class="hub-mark">My도전</span><span class="hub-mark-sub">자격증 학습노트</span>
       </div>
     </header>
     <div class="login-screen">
       <div class="login-card">
-        <h1 class="login-title">자격증 학습노트</h1>
+        <h1 class="login-title">My도전 자격증 학습노트</h1>
         <p class="login-desc">이메일로 로그인 링크를 보내드려요.<br>비밀번호 없이 링크만 누르면 바로 접속돼요.</p>
         <form id="loginForm">
           <input type="email" class="login-input" id="emailInput" placeholder="you@example.com" required autocomplete="email">

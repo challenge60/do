@@ -68,7 +68,7 @@ function buildOne(cert, appCss, appJs, bodyTemplate) {
     '<meta name="apple-mobile-web-app-capable" content="yes">',
     '<meta name="mobile-web-app-capable" content="yes">',
     '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">',
-    `<meta name="apple-mobile-web-app-title" content="${cert.mark} 필답노트">`,
+    `<meta name="apple-mobile-web-app-title" content="${cert.shortMark || cert.mark}노트">`,
     '<meta name="theme-color" content="#243c3d">',
     '<style>',
     appCss,

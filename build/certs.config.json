@@ -3,6 +3,7 @@
     {
       "id": "arch-siljak",
       "mark": "건축기사",
+      "shortMark": "건축",
       "sub": "실기 필답 노트",
       "titleText": "건축기사 실기 필답 노트",
       "count": 1792,
@@ -12,6 +13,7 @@
     {
       "id": "waterproof-siljak",
       "mark": "방수산업기사",
+      "shortMark": "방수",
       "sub": "실기 필답 노트",
       "titleText": "방수산업기사 실기 필답 노트",
       "count": 159,
@@ -21,6 +23,7 @@
     {
       "id": "safety-siljak",
       "mark": "산업안전기사",
+      "shortMark": "산업안전",
       "sub": "필답형 노트",
       "titleText": "산업안전기사 필답형 노트",
       "count": 778,

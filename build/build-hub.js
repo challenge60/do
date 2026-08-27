@@ -55,6 +55,7 @@ function main() {
     const html = template
       .split('{{TITLE_TEXT}}').join(cert.titleText)
       .split('{{MARK}}').join(cert.mark)
+      .split('{{SHORT_MARK}}').join(cert.shortMark || cert.mark)
       .split('{{SUB}}').join(cert.sub)
       .split('{{COUNT}}').join(String(cert.count));
 
