@@ -62,6 +62,17 @@ async function fetchUserStats() {
   return data || [];
 }
 
+async function fetchCommentedQuestions() {
+  const { data, error } = await supabaseClient.rpc("admin_get_commented_questions");
+  if (error) throw error;
+  return data || [];
+}
+
+function certPathFor(certId) {
+  const found = (typeof CERTS_REGISTRY !== "undefined" ? CERTS_REGISTRY : []).find((c) => c.id === certId);
+  return found ? found.path : null;
+}
+
 function certLabel(certId) {
   const found = (typeof CERTS_REGISTRY !== "undefined" ? CERTS_REGISTRY : []).find((c) => c.id === certId);
   return found ? found.name : certId;
@@ -132,9 +143,13 @@ async function downloadAllQuestionData(btn) {
 
 async function renderDashboard() {
   renderLoading();
-  let summary, userStats;
+  let summary, userStats, commentedQuestions;
   try {
-    [summary, userStats] = await Promise.all([fetchSummary(), fetchUserStats()]);
+    [summary, userStats, commentedQuestions] = await Promise.all([
+      fetchSummary(),
+      fetchUserStats(),
+      fetchCommentedQuestions(),
+    ]);
   } catch (e) {
     console.error(e);
     renderDenied();
@@ -159,6 +174,20 @@ async function renderDashboard() {
       <td>${(u.certs_used || []).map(certLabel).map(escapeHtml).join(", ") || "—"}</td>
       <td class="num">${fmtBytes(u.total_bytes)}</td>
     </tr>`).join("");
+
+  const commentRows = commentedQuestions.map((row) => {
+    const path = certPathFor(row.cert_id);
+    const link = path ? `${path}?q=${encodeURIComponent(row.question_id)}` : null;
+    const preview = escapeHtml((row.last_content || "").slice(0, 40)) + (row.last_content && row.last_content.length > 40 ? "…" : "");
+    return `
+    <tr>
+      <td>${escapeHtml(certLabel(row.cert_id))}</td>
+      <td style="white-space:normal;max-width:220px;">${preview}</td>
+      <td class="num">${row.comment_count}개</td>
+      <td>${fmtDate(row.last_comment_at)}</td>
+      <td>${link ? `<a class="admin-back" style="margin:0;display:inline;" href="${link}" target="_blank" rel="noopener">문제로 이동 →</a>` : "—"}</td>
+    </tr>`;
+  }).join("");
 
   const repoLinks = GITHUB_REPOS.map((r) => `
     <a class="admin-back" style="display:block;margin-bottom:6px;"
@@ -203,6 +232,14 @@ async function renderDashboard() {
         <table class="admin-table">
           <thead><tr><th>이메일</th><th>가입일</th><th>최근 활동</th><th>사용 중인 자격증</th><th>사용 용량</th></tr></thead>
           <tbody>${userRows || `<tr><td colspan="5" class="admin-empty">가입자가 없습니다</td></tr>`}</tbody>
+        </table>
+      </div>
+
+      <p class="admin-section-title">💬 오답의견 올라온 문제 (최신순)</p>
+      <div class="admin-table-wrap" style="white-space:normal;">
+        <table class="admin-table" style="white-space:normal;">
+          <thead><tr><th>자격증</th><th>최근 의견</th><th>개수</th><th>최근 작성</th><th></th></tr></thead>
+          <tbody>${commentRows || `<tr><td colspan="5" class="admin-empty">아직 올라온 의견이 없습니다</td></tr>`}</tbody>
         </table>
       </div>
 
