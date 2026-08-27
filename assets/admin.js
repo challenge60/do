@@ -96,6 +96,40 @@ async function downloadBackup(btn) {
   }
 }
 
+async function downloadAllQuestionData(btn) {
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "문제 데이터 모으는 중…";
+  try {
+    const zip = new JSZip();
+    const certs = typeof CERTS_REGISTRY !== "undefined" ? CERTS_REGISTRY : [];
+    for (const cert of certs) {
+      const res = await fetch(cert.path.replace(/index\.html$/, "data.js"), { cache: "no-store" });
+      if (!res.ok) throw new Error(`${cert.name} data.js 다운로드 실패 (${res.status})`);
+      const text = await res.text();
+      zip.file(`${cert.id}.data.js`, text);
+    }
+    const blob = await zip.generateAsync({ type: "blob" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+    a.href = url;
+    a.download = `question-data-backup_${stamp}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    btn.textContent = "다운로드 완료 ✓";
+  } catch (e) {
+    console.error(e);
+    alert("문제 데이터 백업 실패: " + e.message);
+    btn.textContent = originalText;
+  } finally {
+    btn.disabled = false;
+    setTimeout(() => { btn.textContent = originalText; }, 2500);
+  }
+}
+
 async function renderDashboard() {
   renderLoading();
   let summary, userStats;
@@ -132,6 +166,13 @@ async function renderDashboard() {
       ⬇ ${escapeHtml(r.label)} — ZIP 다운로드
     </a>`).join("");
 
+  const certs = typeof CERTS_REGISTRY !== "undefined" ? CERTS_REGISTRY : [];
+  const questionDataLinks = certs.map((cert) => `
+    <a class="admin-back" style="display:block;margin-bottom:6px;"
+       href="${escapeHtml(cert.path.replace(/index\.html$/, "data.js"))}" download>
+      ⬇ ${escapeHtml(cert.name)} — data.js 다운로드 (${cert.questionCount.toLocaleString()}문항)
+    </a>`).join("");
+
   root.innerHTML = `
     <div class="admin-wrap">
       <a class="admin-back" href="index.html">← 목록으로</a>
@@ -165,20 +206,35 @@ async function renderDashboard() {
         </table>
       </div>
 
-      <p class="admin-section-title">💾 데이터베이스 백업</p>
+      <p class="admin-section-title">💾 데이터베이스 백업 (학습기록 · 관리자 수정사항 · 가입자)</p>
       <div class="admin-table-wrap" style="padding:16px;">
         <p style="font-size:13px;color:var(--muted);margin:0 0 12px;">
           학습기록·관리자 수정사항·가입자 목록 전체를 JSON 파일 하나로 다운로드합니다.
           Supabase에 문제가 생기더라도 이 파일만 있으면 데이터를 복구할 수 있어요.
           주기적으로(예: 월 1회) 받아서 로컬이나 클라우드 드라이브에 보관하는 걸 추천드려요.
         </p>
-        <button type="button" class="admin-link-btn-like" id="backupBtn"
+        <button type="button" id="backupBtn"
           style="border:1px solid var(--amber);background:var(--amber);color:#fff;font-size:13px;font-weight:600;padding:9px 16px;border-radius:10px;cursor:pointer;">
           지금 백업 파일 다운로드 (JSON)
         </button>
       </div>
 
-      <p class="admin-section-title">📦 소스코드 백업</p>
+      <p class="admin-section-title">📚 원본 문제 데이터 백업 (문제 · 정답 · 이미지)</p>
+      <div class="admin-table-wrap" style="padding:16px;">
+        <p style="font-size:13px;color:var(--muted);margin:0 0 12px;">
+          자격증별 원본 문제은행(<code>data.js</code>) 자체를 백업합니다. 이건 GitHub에 커밋될 때마다
+          버전 이력이 남긴 하지만, 자주는 아니어도 가끔 로컬에 사본을 받아두면 안심할 수 있어요.
+          (관리자가 문제를 고친 내용은 위 "데이터베이스 백업"의 <code>question_overrides</code> 항목에
+          이미 포함되어 있습니다)
+        </p>
+        <button type="button" id="allDataBtn" style="margin-bottom:12px;
+          border:1px solid var(--teal);background:var(--teal);color:#fff;font-size:13px;font-weight:600;padding:9px 16px;border-radius:10px;cursor:pointer;">
+          전체 자격증 문제 데이터 ZIP으로 한 번에 다운로드
+        </button>
+        <div style="margin-top:6px;">${questionDataLinks || `<p class="admin-empty" style="padding:8px 0;">등록된 자격증이 없습니다</p>`}</div>
+      </div>
+
+      <p class="admin-section-title">📦 소스코드(엔진) 백업</p>
       <div class="admin-table-wrap" style="padding:16px;">
         <p style="font-size:13px;color:var(--muted);margin:0 0 12px;">
           코드는 GitHub에 커밋할 때마다 이미 버전 이력이 남아있어 사실상 자동 백업되고 있어요.
@@ -189,6 +245,7 @@ async function renderDashboard() {
     </div>`;
 
   document.getElementById("backupBtn").addEventListener("click", (e) => downloadBackup(e.currentTarget));
+  document.getElementById("allDataBtn").addEventListener("click", (e) => downloadAllQuestionData(e.currentTarget));
 }
 
 async function boot() {
