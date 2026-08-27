@@ -3,20 +3,28 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>건축기사 실기 필답노트</title>
+<title>건축기사 실기 필답 노트</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="건축기사 필답노트">
+<meta name="theme-color" content="#243c3d">
 <link rel="stylesheet" href="../../assets/app.css">
 </head>
 <body>
 
-
 <div class="app-shell">
 <header class="top compact">
   <div class="wrap">
-    <div class="brand" style="display: none;"><span class="mark">건축기사</span><span class="sub">실기 필답 노트</span><span class="ver" id="appVerBadge">Ver. 26.08.15.13.09</span></div>
+    <a class="hub-link" href="../../index.html">📚 전체 자격증 목록</a>
+    <div class="brand" style="display: none;"><span class="mark">건축기사</span><span class="sub">실기 필답 노트</span><span class="ver" id="appVerBadge">Ver. 2026.08.23_16.43</span></div>
     <div class="meta-row" id="metaRow" style="display: none;">
       <div class="meta-line" id="headerMeta" style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;">
-        <span id="headerMetaLeft">Ver.26.08.17.01.10</span>
-        <span id="headerMetaRight">2004–2026 (1792문항)</span>
+        <span id="headerMetaLeft">Ver. 2026.08.23_16.43</span>
+        <span id="headerMetaRight">1792문항</span>
       </div>
       <button type="button" class="install-btn" id="installBtn">📲 앱 설치</button>
     </div>
@@ -32,6 +40,26 @@
     <div class="section-card">
       <div class="settings-row"><div class="label">현재 자격증</div><div>건축기사 실기 필답 노트</div></div>
       <div class="settings-row"><div class="label">현재 문항 수</div><div>1792문항</div></div>
+    </div>
+
+    <div class="section-card">
+      <h3>🔊 음성(TTS) 읽기 설정</h3>
+      <p style="font-size:0.76rem;color:var(--muted);margin-top:4px;line-height:1.5;">
+        문제·정답 읽어주기와 회독 학습의 🔊음성모드에서 사용할 목소리를 고를 수 있어요. 브라우저(기기)에 설치된 음성 목록을 그대로 보여주며,
+        같은 한국어라도 브라우저마다 제공되는 목소리 종류와 자연스러움이 달라요. 크롬은 대개 "Google 한국의" 계열이 가장 자연스러워요.
+      </p>
+      <div class="settings-row" style="margin-top:10px;">
+        <div class="label">읽기 목소리</div>
+        <select id="ttsVoiceSelect" style="max-width:220px;"><option value="">자동 선택 (기본)</option><option value="한국어 대한민국">한국어 대한민국 (ko_KR)</option><option value="코카니어 인도">코카니어 인도 (kok_IN_#Deva)</option><option value="코카니어 인도">코카니어 인도 (kok_IN_#Latn)</option></select>
+      </div>
+      <div class="btn-row" style="margin-top:10px;">
+        <button class="btn ghost" id="ttsVoiceTestBtn">▶ 미리듣기</button>
+        <button class="btn ghost" id="ttsVoiceRefreshBtn">🔄 목록 새로고침</button>
+      </div>
+      <p style="font-size:0.72rem;color:var(--muted);margin-top:8px;">
+        목록이 비어있거나 "Google 한국의" 같은 음성이 안 보이면, 브라우저 자체 설정(예: 크롬 → 설정 → 접근성 → 텍스트 음성 변환)에서
+        해당 음성이 다운로드/활성화되어 있는지 확인해보세요. 여기서는 브라우저가 제공하는 음성만 선택할 수 있어요.
+      </p>
     </div>
 
     <div class="section-card">
@@ -105,19 +133,34 @@
     </div>
   </div>
 
+<div class="study-navbar" id="studyNavBar" style="display: none;">
+  <div class="wrap">
+    <div class="btn-row" style="margin-top:0;">
+      <button class="btn ghost" id="studyNavPrev">← 이전</button>
+      <button class="btn danger" id="studyNavWrong">오답 X</button>
+      <button class="btn primary" id="studyNavReveal">정답보기</button>
+      <button class="btn success" id="studyNavCorrect">정답 O</button>
+      <button class="btn ghost" id="studyNavNext">다음 →</button>
+    </div>
+  </div>
+</div>
+
 <nav class="bottom">
+  <div class="nav-inner">
   <button data-view="home" class=""><span class="ic">🏠</span><span class="lb">홈</span></button>
   <button data-view="exam" class=""><span class="ic">📝</span><span class="lb">모의고사</span></button>
-  <button data-view="unit"><span class="ic">📚</span><span class="lb">단원별</span></button>
+  <button data-view="unit" class=""><span class="ic">📚</span><span class="lb">단원별</span></button>
   <button data-view="year" class=""><span class="ic">📅</span><span class="lb">연도별</span></button>
-  <button data-view="freq"><span class="ic">🔥</span><span class="lb">빈도별</span></button>
+  <button data-view="freq" class=""><span class="ic">🔥</span><span class="lb">빈도별</span></button>
   <button data-view="wrong"><span class="ic">🔁</span><span class="lb">오답노트</span></button>
   <button data-view="bookmark"><span class="ic">⭐</span><span class="lb">즐겨찾기</span></button>
   <button data-view="about"><span class="ic">💬</span><span class="lb">오픈톡</span></button>
+  </div>
 </nav>
 </div>
 
 
+<script>
 
 <div id="toast" class="toast"></div>
 

@@ -1,61 +1,57 @@
 :root{
-  --ink:#1b2a44;
-  --paper:#efe9da;
-  --paper-2:#e6dec8;
-  --card:#f8f5ec;
-  --line:#d8cfb0;
-  --muted:#6f6753;
-  --stamp:#b8432b;
-  --stamp-soft:#f3dcd3;
-  --seal:#2e6e5c;
-  --seal-soft:#dee8e2;
-  --radius:14px;
+  --ink:#1c2430;
+  --deep:#243c3d;
+  --teal:#2f6b57;
+  --teal-soft:#e3ede8;
+  --amber:#c5934c;
+  --amber-soft:#faeedd;
+  --rose:#a1503c;
+  --rose-soft:#f5e6df;
+  --paper:#faf8f3;
+  --card:#ffffff;
+  --line:#eae6da;
+  --muted:#7b7669;
+  --radius:12px;
 }
 *{box-sizing:border-box;}
 html,body{margin:0;padding:0;}
 body{
   background:var(--paper);
   color:var(--ink);
-  font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  font-family:'IBM Plex Sans KR',-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
   min-height:100vh;
 }
 .serif{
-  font-family:"Noto Serif KR",Georgia,"Apple SD Gothic Neo",serif;
+  font-family:'IBM Plex Sans KR',-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",serif;
+  font-weight:800;
 }
 
-/* subtle paper grain via layered gradients */
-body{
-  background-image:
-    radial-gradient(circle at 18% 8%, rgba(184,67,43,0.05), transparent 40%),
-    radial-gradient(circle at 85% 92%, rgba(46,110,92,0.06), transparent 45%);
-  background-color:var(--paper);
-}
-
-.wrap{max-width:760px;margin:0 auto;padding:0 20px;}
+.wrap{max-width:640px;margin:0 auto;padding:0 18px;}
 
 /* ---------- header ---------- */
 .hub-header{
   padding:36px 0 22px;
-  border-bottom:1px solid var(--line);
+  border-bottom:2px solid var(--amber);
 }
 .eyebrow{
   font-size:12px;
   letter-spacing:.18em;
   text-transform:uppercase;
-  color:var(--stamp);
+  color:var(--amber);
   font-weight:700;
   margin:0 0 8px;
 }
 .hub-title{
-  font-size:30px;
-  font-weight:700;
+  font-size:28px;
+  font-weight:800;
   margin:0 0 6px;
   letter-spacing:-.01em;
+  color:var(--deep);
 }
 .hub-desc{
   margin:0;
   color:var(--muted);
-  font-size:14.5px;
+  font-size:14px;
   line-height:1.5;
 }
 .hub-user-row{
@@ -77,14 +73,14 @@ body{
   border-radius:999px;
   cursor:pointer;
 }
-.logout-btn:hover{border-color:var(--stamp);color:var(--stamp);}
+.logout-btn:hover{border-color:var(--rose);color:var(--rose);}
 
 /* ---------- cert grid ---------- */
 .cert-grid{
-  padding:26px 0 60px;
+  padding:22px 0 60px;
   display:grid;
   grid-template-columns:1fr;
-  gap:16px;
+  gap:14px;
 }
 @media(min-width:560px){
   .cert-grid{grid-template-columns:1fr 1fr;}
@@ -95,7 +91,7 @@ body{
   background:var(--card);
   border:1px solid var(--line);
   border-radius:var(--radius);
-  padding:20px 20px 18px 26px;
+  padding:18px 20px;
   display:flex;
   align-items:center;
   gap:16px;
@@ -103,68 +99,53 @@ body{
   text-decoration:none;
   color:inherit;
   transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease;
-  overflow:hidden;
 }
 .ticket:hover{
   transform:translateY(-2px);
-  box-shadow:0 10px 24px -14px rgba(27,42,68,.35);
-  border-color:#c9bd94;
-}
-/* perforated left edge */
-.ticket::before{
-  content:"";
-  position:absolute;
-  left:0; top:0; bottom:0;
-  width:10px;
-  background-image:radial-gradient(circle, var(--paper) 2.6px, transparent 2.7px);
-  background-size:10px 14px;
-  background-position:center;
+  box-shadow:0 10px 24px -14px rgba(36,60,61,.25);
+  border-color:var(--amber);
 }
 .ticket-body{flex:1;min-width:0;}
 .ticket-name{
-  font-size:17px;
-  font-weight:700;
+  font-size:16.5px;
+  font-weight:800;
   margin:0 0 4px;
   letter-spacing:-.01em;
+  color:var(--deep);
 }
 .ticket-subtitle{
   font-size:12.5px;
   color:var(--muted);
   margin:0 0 10px;
-}
-.ticket-meta{
-  font-size:12px;
-  color:var(--muted);
+  line-height:1.5;
 }
 .ticket-cta{
   font-size:12.5px;
   font-weight:700;
-  color:var(--seal);
+  color:var(--teal);
 }
 
-/* signature element: ink-stamp progress ring */
+/* 진도(전체 문항 중 한 번이라도 푼 비율) 게이지 — 정답률과는 다른 지표라 카드 문구에 별도 표기함 */
 .stamp-ring{
-  --pct:0;
   position:relative;
-  width:56px;height:56px;flex-shrink:0;
+  width:52px;height:52px;flex-shrink:0;
   border-radius:50%;
   display:flex;align-items:center;justify-content:center;
-  transform:rotate(-6deg);
 }
 .stamp-ring svg{position:absolute;inset:0;transform:rotate(-90deg);}
 .stamp-ring .stamp-track{fill:none;stroke:var(--line);stroke-width:5;}
 .stamp-ring .stamp-fill{
-  fill:none;stroke:var(--stamp);stroke-width:5;stroke-linecap:round;
+  fill:none;stroke:var(--amber);stroke-width:5;stroke-linecap:round;
   transition:stroke-dashoffset .5s ease;
 }
 .stamp-ring .stamp-pct{
-  font-size:13px;
+  font-size:12.5px;
   font-weight:800;
-  color:var(--stamp);
-  font-family:"Noto Serif KR",Georgia,serif;
+  color:var(--amber);
+  font-family:'IBM Plex Mono',monospace;
 }
-.stamp-ring.is-complete .stamp-fill{stroke:var(--seal);}
-.stamp-ring.is-complete .stamp-pct{color:var(--seal);}
+.stamp-ring.is-complete .stamp-fill{stroke:var(--teal);}
+.stamp-ring.is-complete .stamp-pct{color:var(--teal);}
 
 .empty-note{
   font-size:12px;
@@ -203,18 +184,19 @@ body{
   width:52px;height:52px;
   margin:0 auto 16px;
   border-radius:50%;
-  border:2.5px solid var(--stamp);
+  border:2.5px solid var(--deep);
+  background:var(--amber-soft);
   display:flex;align-items:center;justify-content:center;
-  color:var(--stamp);
-  font-family:"Noto Serif KR",Georgia,serif;
+  color:var(--deep);
+  font-family:'IBM Plex Sans KR',sans-serif;
   font-weight:800;
   font-size:20px;
-  transform:rotate(-6deg);
 }
 .login-title{
   font-size:19px;
-  font-weight:700;
+  font-weight:800;
   margin:0 0 6px;
+  color:var(--deep);
 }
 .login-desc{
   font-size:13px;
@@ -231,20 +213,22 @@ body{
   background:#fff;
   color:var(--ink);
   margin-bottom:10px;
+  font-family:inherit;
 }
-.login-input:focus{outline:2px solid var(--seal);outline-offset:1px;}
+.login-input:focus{outline:2px solid var(--teal);outline-offset:1px;}
 .login-btn{
   width:100%;
   padding:12px 14px;
   border:none;
   border-radius:10px;
-  background:var(--ink);
+  background:var(--deep);
   color:#fff;
   font-size:14px;
   font-weight:700;
   cursor:pointer;
+  font-family:inherit;
 }
-.login-btn:hover{background:#0f1b30;}
+.login-btn:hover{background:#1b2f30;}
 .login-btn:disabled{opacity:.5;cursor:default;}
 .login-status{
   margin-top:14px;
@@ -252,8 +236,8 @@ body{
   color:var(--muted);
   min-height:16px;
 }
-.login-status.ok{color:var(--seal);}
-.login-status.err{color:var(--stamp);}
+.login-status.ok{color:var(--teal);}
+.login-status.err{color:var(--rose);}
 
 @media (prefers-reduced-motion:reduce){
   .ticket, .stamp-ring .stamp-fill{transition:none;}

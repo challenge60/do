@@ -37,10 +37,13 @@ async function fetchProgressMap(userId) {
   return map;
 }
 
-function computePct(certProgress, questionCount) {
-  if (!certProgress || !certProgress.progress || !questionCount) return 0;
-  const solved = Object.keys(certProgress.progress).length;
-  return Math.min(100, (solved / questionCount) * 100);
+function computeStats(certProgress, questionCount) {
+  const solved = certProgress && certProgress.progress ? Object.keys(certProgress.progress).length : 0;
+  const pct = questionCount ? Math.min(100, (solved / questionCount) * 100) : 0;
+  const solvedTotal = (certProgress && certProgress.solvedTotal) || 0;
+  const correctTotal = (certProgress && certProgress.correctTotal) || 0;
+  const acc = solvedTotal ? Math.round((correctTotal / solvedTotal) * 100) : null;
+  return { solved, pct, acc };
 }
 
 async function renderHub(session) {
@@ -48,13 +51,15 @@ async function renderHub(session) {
   const progressMap = await fetchProgressMap(user.id);
 
   const cards = CERTS_REGISTRY.map((cert) => {
-    const pct = computePct(progressMap[cert.id], cert.questionCount);
+    const { solved, pct, acc } = computeStats(progressMap[cert.id], cert.questionCount);
+    const metaLine = `${escapeHtml(cert.subtitle)} · 진도 ${solved}/${cert.questionCount.toLocaleString()}문항`
+      + (acc !== null ? ` · 정답률 ${acc}%` : "");
     return `
       <a class="ticket" href="${escapeHtml(cert.path)}">
         ${stampRing(pct, pct >= 100)}
         <div class="ticket-body">
           <p class="ticket-name">${escapeHtml(cert.name)}</p>
-          <p class="ticket-subtitle">${escapeHtml(cert.subtitle)} · 총 ${cert.questionCount.toLocaleString()}문항</p>
+          <p class="ticket-subtitle">${metaLine}</p>
           <p class="ticket-cta">${pct > 0 ? "이어서 학습 →" : "학습 시작 →"}</p>
         </div>
       </a>`;
