@@ -319,14 +319,24 @@ function renderLogin(statusMsg, statusType, mode) {
         </div>
         <p class="login-desc">${
           isSignup
-            ? "이메일과 비밀번호로 가입해주세요.<br>최초 1회만 이메일 인증이 필요하고, 이후엔 이메일 없이 비밀번호로 바로 로그인돼요."
+            ? "이메일과 비밀번호로 가입해주세요."
             : "가입하신 이메일과 비밀번호로 로그인하세요."
         }</p>
         <form id="authForm">
           <input type="email" class="login-input" id="emailInput" placeholder="you@example.com" required autocomplete="email" autocapitalize="off" autocorrect="off" spellcheck="false">
           <input type="password" class="login-input" id="passwordInput" placeholder="비밀번호 (6자 이상)" required minlength="6" autocomplete="${isSignup ? "new-password" : "current-password"}" autocapitalize="off" autocorrect="off" spellcheck="false">
-          ${isSignup ? `<input type="password" class="login-input" id="passwordConfirmInput" placeholder="비밀번호 확인" required minlength="6" autocomplete="new-password" autocapitalize="off" autocorrect="off" spellcheck="false">` : ""}
-          <button type="submit" class="login-btn" id="authBtn">${isSignup ? "가입하고 인증 메일 받기" : "로그인"}</button>
+          ${isSignup ? `
+          <input type="password" class="login-input" id="passwordConfirmInput" placeholder="비밀번호 확인" required minlength="6" autocomplete="new-password" autocapitalize="off" autocorrect="off" spellcheck="false">
+          <input type="text" class="login-input" id="nicknameInput" placeholder="닉네임 (2자 이상, 랭킹·오답의견에 표시돼요)" required minlength="2" maxlength="20">
+          <p class="login-field-label">관심 있는 자격증 (여러 개 선택 가능)</p>
+          <div class="cert-check-group" id="certCheckGroup">
+            ${(typeof CERTS_REGISTRY !== "undefined" ? CERTS_REGISTRY : []).map((c) => `
+              <label class="cert-check-item">
+                <input type="checkbox" value="${escapeHtml(c.id)}" class="cert-check-input">
+                <span>${escapeHtml(c.name)}</span>
+              </label>`).join("")}
+          </div>` : ""}
+          <button type="submit" class="login-btn" id="authBtn">${isSignup ? "가입하기" : "로그인"}</button>
         </form>
         <p class="login-status ${statusType || ""}" id="loginStatus">${statusMsg || ""}</p>
       </div>
@@ -348,8 +358,16 @@ function renderLogin(statusMsg, statusType, mode) {
 
     if (isSignup) {
       const passwordConfirm = document.getElementById("passwordConfirmInput").value;
+      const nickname = document.getElementById("nicknameInput").value.trim();
+      const interestedCerts = Array.from(document.querySelectorAll(".cert-check-input:checked")).map((el) => el.value);
       if (password !== passwordConfirm) {
         status.textContent = "비밀번호가 서로 달라요.";
+        status.className = "login-status err";
+        btn.disabled = false;
+        return;
+      }
+      if (!nickname) {
+        status.textContent = "닉네임을 입력해주세요.";
         status.className = "login-status err";
         btn.disabled = false;
         return;
@@ -364,15 +382,31 @@ function renderLogin(statusMsg, statusType, mode) {
         if (error) throw error;
         // Supabase의 알려진 신호: 이미 가입(인증 완료)된 이메일로 signUp을 다시 호출하면
         // 에러 없이 성공 응답이 오지만 data.user.identities가 빈 배열로 온다(사용자 존재 여부를
-        // 외부에 노출하지 않기 위한 설계). 이 경우 실제로는 인증 메일이 발송되지 않고, 대신
-        // 방금 입력한 비밀번호가 그 기존 계정에 설정된다 — 바로 로그인하면 된다.
+        // 외부에 노출하지 않기 위한 설계). 이 경우 비밀번호만 그 기존 계정에 반영되고 새로 만들어지진 않음.
         const alreadyExists = data && data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0;
         if (alreadyExists) {
-          status.textContent = `이미 가입되어 있는 이메일이에요. 인증 메일은 따로 가지 않아요 — 방금 입력하신 비밀번호가 그 계정에 저장됐으니, "로그인" 탭에서 바로 로그인해보세요.`;
+          status.textContent = `이미 가입되어 있는 이메일이에요. 방금 입력하신 비밀번호가 그 계정에 저장됐으니, "로그인" 탭에서 바로 로그인해보세요.`;
           status.className = "login-status ok";
+          btn.disabled = false;
+          return;
+        }
+        // 닉네임 · 관심 자격증 저장 (프로젝트에서 "Confirm email"을 꺼둔 경우 signUp() 즉시
+        // 로그인 세션이 생기므로 바로 저장 가능; 켜져 있는 경우엔 세션이 아직 없어 저장을
+        // 건너뛰고, 이메일 인증 링크를 누른 뒤 처음 로그인할 때 다시 물어보는 게 안전함)
+        if (data.session) {
+          await supabaseClient.from("profiles").upsert(
+            { user_id: data.user.id, nickname, interested_certs: interestedCerts, updated_at: new Date().toISOString() },
+            { onConflict: "user_id" }
+          );
+          status.textContent = "가입 완료! 잠시 후 자동으로 이동해요.";
+          status.className = "login-status ok";
+          // 아래 onAuthStateChange(SIGNED_IN)가 자동으로 목록 화면(또는 next 자격증)으로 이동시킴
         } else {
-          status.textContent = `${email} 주소로 인증 메일을 보냈어요. 메일함(스팸함도 확인!)에서 인증 링크를 눌러주시면, 그 다음부턴 이메일 없이 비밀번호로 바로 로그인할 수 있어요.`;
+          sessionStorage.setItem("pendingNickname", nickname);
+          sessionStorage.setItem("pendingInterestedCerts", JSON.stringify(interestedCerts));
+          status.textContent = `${email} 주소로 인증 메일을 보냈어요. 메일함(스팸함도 확인!)에서 인증 링크를 눌러주시면 가입이 완료돼요.`;
           status.className = "login-status ok";
+          btn.disabled = false;
         }
       } catch (err) {
         const isRateLimit = /rate limit/i.test(err.message);
@@ -380,7 +414,6 @@ function renderLogin(statusMsg, statusType, mode) {
           ? "메일 발송 요청이 너무 잦아서 잠시 제한됐어요(보통 시간당 몇 통 수준). 1시간 정도 뒤에 다시 시도해주세요."
           : "가입 실패: " + err.message;
         status.className = "login-status err";
-      } finally {
         btn.disabled = false;
       }
     } else {
@@ -495,6 +528,22 @@ function parseAuthErrorFromUrl() {
   return "로그인 링크가 유효하지 않아요. 아래에 이메일을 다시 입력해서 새 링크를 받아주세요.";
 }
 
+async function applyPendingProfileIfAny(userId) {
+  const nickname = sessionStorage.getItem("pendingNickname");
+  if (!nickname) return;
+  const interestedCerts = JSON.parse(sessionStorage.getItem("pendingInterestedCerts") || "[]");
+  sessionStorage.removeItem("pendingNickname");
+  sessionStorage.removeItem("pendingInterestedCerts");
+  try {
+    await supabaseClient.from("profiles").upsert(
+      { user_id: userId, nickname, interested_certs: interestedCerts, updated_at: new Date().toISOString() },
+      { onConflict: "user_id" }
+    );
+  } catch (e) {
+    console.warn("가입 시 입력한 닉네임 반영 실패:", e.message);
+  }
+}
+
 async function boot() {
   const tokenHashParams = getTokenHashParams();
   if (tokenHashParams) {
@@ -504,6 +553,7 @@ async function boot() {
   const authError = parseAuthErrorFromUrl();
   const { data: { session } } = await supabaseClient.auth.getSession();
   if (session) {
+    await applyPendingProfileIfAny(session.user.id);
     if (goToNextIfAny()) return;
     renderHub(session);
   } else {
@@ -511,8 +561,9 @@ async function boot() {
   }
 }
 
-supabaseClient.auth.onAuthStateChange((event, session) => {
+supabaseClient.auth.onAuthStateChange(async (event, session) => {
   if (event === "SIGNED_IN" && session) {
+    await applyPendingProfileIfAny(session.user.id);
     if (goToNextIfAny()) return;
     renderHub(session);
   } else if (event === "SIGNED_OUT") {

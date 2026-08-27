@@ -168,7 +168,9 @@ async function renderDashboard() {
 
   const userRows = userStats.map((u) => `
     <tr>
+      <td>${escapeHtml(u.nickname || "(닉네임 없음)")}</td>
       <td>${escapeHtml(u.email || "(이메일 없음)")}</td>
+      <td>${(u.interested_certs || []).map(certLabel).map(escapeHtml).join(", ") || "—"}</td>
       <td>${fmtDate(u.signed_up_at)}</td>
       <td>${fmtDate(u.last_active_at)}</td>
       <td>${(u.certs_used || []).map(certLabel).map(escapeHtml).join(", ") || "—"}</td>
@@ -230,8 +232,8 @@ async function renderDashboard() {
       <p class="admin-section-title">계정별 상세 (용량 많은 순)</p>
       <div class="admin-table-wrap">
         <table class="admin-table">
-          <thead><tr><th>이메일</th><th>가입일</th><th>최근 활동</th><th>사용 중인 자격증</th><th>사용 용량</th></tr></thead>
-          <tbody>${userRows || `<tr><td colspan="5" class="admin-empty">가입자가 없습니다</td></tr>`}</tbody>
+          <thead><tr><th>닉네임</th><th>이메일</th><th>관심 자격증</th><th>가입일</th><th>최근 활동</th><th>사용 중인 자격증</th><th>사용 용량</th></tr></thead>
+          <tbody>${userRows || `<tr><td colspan="7" class="admin-empty">가입자가 없습니다</td></tr>`}</tbody>
         </table>
       </div>
 

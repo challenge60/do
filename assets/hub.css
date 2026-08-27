@@ -312,6 +312,15 @@ body{
   font-family:inherit;
 }
 .login-input:focus{outline:2px solid var(--teal);outline-offset:1px;}
+.login-field-label{font-size:12px;color:var(--muted);margin:4px 0 6px;font-weight:600;}
+.cert-check-group{display:flex;flex-direction:column;gap:6px;margin-bottom:12px;}
+.cert-check-item{
+  display:flex;align-items:center;gap:8px;
+  border:1px solid var(--line);border-radius:10px;
+  padding:9px 12px;font-size:13.5px;color:var(--ink);
+  cursor:pointer;
+}
+.cert-check-item input{width:16px;height:16px;accent-color:var(--teal);}
 .login-btn{
   width:100%;
   padding:12px 14px;
