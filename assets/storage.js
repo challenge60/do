@@ -150,6 +150,29 @@
     window.adminOverrides[questionId] = { ...payload };
   };
 
+  // ---------- 로그아웃 후에도 화면이 남아있는 문제 방지 ----------
+  // 브라우저 "뒤로가기"로 이 페이지에 돌아오면, 크롬 등이 페이지를 새로 불러오지 않고
+  // 캐시된 화면(bfcache)을 그대로 복원하는 경우가 있다. 그러면 이 파일의 init() 코드가
+  // 다시 실행되지 않아 로그아웃 여부를 재확인하지 못하고, 로그아웃 전 화면(문항 데이터 등)이
+  // 그대로 남아있게 된다. pageshow(bfcache 복원 시 event.persisted===true로 발생)와
+  // 화면이 다시 보이는 시점(visibilitychange)마다 세션을 다시 확인해서, 로그아웃 상태라면
+  // 즉시 로그인 화면으로 돌려보낸다.
+  async function recheckSessionOrRedirect() {
+    try {
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      if (!session) goToLoginWithReturn();
+    } catch (e) {
+      // 세션 확인 자체가 실패하면(네트워크 오류 등) 안전한 쪽으로 판단해 로그인 화면으로 보낸다
+      goToLoginWithReturn();
+    }
+  }
+  window.addEventListener("pageshow", (e) => {
+    if (e.persisted) recheckSessionOrRedirect();
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") recheckSessionOrRedirect();
+  });
+
   async function init() {
     const { data: { session } } = await supabaseClient.auth.getSession();
     if (!session) {
