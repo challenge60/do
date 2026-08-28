@@ -190,10 +190,16 @@ async function renderDashboard() {
       <td class="num">${fmtBytes(row.bytes_per_cert)}</td>
     </tr>`).join("");
 
+  const ROLE_LABELS = { admin: "관리자", editor: "편집자", general: "일반", excellent: "우수회원" };
   const userRows = userStats.map((u) => `
-    <tr>
+    <tr data-user-id="${escapeHtml(u.user_id)}">
       <td>${escapeHtml(u.nickname || "(닉네임 없음)")}</td>
       <td>${escapeHtml(u.email || "(이메일 없음)")}</td>
+      <td>
+        <select class="role-select" style="border:1px solid var(--line);border-radius:6px;padding:4px 6px;font-size:12px;background:#fff;">
+          ${Object.entries(ROLE_LABELS).map(([val, label]) => `<option value="${val}" ${u.role === val ? "selected" : ""}>${label}</option>`).join("")}
+        </select>
+      </td>
       <td>${(u.interested_certs || []).map(certLabel).map(escapeHtml).join(", ") || "—"}</td>
       <td>${fmtDate(u.signed_up_at)}</td>
       <td>${fmtDate(u.last_active_at)}</td>
@@ -277,8 +283,8 @@ async function renderDashboard() {
       <p class="admin-section-title">계정별 상세 (용량 많은 순)</p>
       <div class="admin-table-wrap">
         <table class="admin-table">
-          <thead><tr><th>닉네임</th><th>이메일</th><th>관심 자격증</th><th>가입일</th><th>최근 활동</th><th>사용 중인 자격증</th><th>사용 용량</th></tr></thead>
-          <tbody>${userRows || `<tr><td colspan="7" class="admin-empty">가입자가 없습니다</td></tr>`}</tbody>
+          <thead><tr><th>닉네임</th><th>이메일</th><th>등급</th><th>관심 자격증</th><th>가입일</th><th>최근 활동</th><th>사용 중인 자격증</th><th>사용 용량</th></tr></thead>
+          <tbody>${userRows || `<tr><td colspan="8" class="admin-empty">가입자가 없습니다</td></tr>`}</tbody>
         </table>
       </div>
 
@@ -339,6 +345,22 @@ async function renderDashboard() {
       if (ok) {
         row.style.opacity = "0.4";
         row.querySelectorAll("button").forEach((b) => (b.disabled = true));
+      }
+    });
+  });
+  document.querySelectorAll(".role-select").forEach((sel) => {
+    sel.addEventListener("change", async () => {
+      const row = sel.closest("tr");
+      const userId = row.dataset.userId;
+      const newRole = sel.value;
+      sel.disabled = true;
+      try {
+        const { error } = await supabaseClient.from("profiles").update({ role: newRole }).eq("user_id", userId);
+        if (error) throw error;
+      } catch (e) {
+        alert("등급 변경 실패: " + e.message);
+      } finally {
+        sel.disabled = false;
       }
     });
   });
