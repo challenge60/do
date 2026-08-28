@@ -100,18 +100,74 @@ challenge60/do (repo)
 | 이름 | 종류 | 용도 |
 |---|---|---|
 | `user_progress` | 테이블 | 사용자별 학습기록(진도·오답·즐겨찾기·개인 문제수정 등), `store` 객체 그대로 저장 |
-| `admins` | 테이블 | 관리자로 지정된 계정의 user_id 목록 |
-| `question_overrides` | 테이블 | 관리자가 고친 문제/정답/이미지 (전체 사용자 공용, cert_id+question_id가 PK) |
-| `admin_get_summary()` | RPC 함수 | 관리자 전용 — 자격증별 사용자 수·용량 요약 |
-| `admin_get_user_stats()` | RPC 함수 | 관리자 전용 — 계정별 가입일·최근활동·사용 용량 상세 |
-| `admin_export_backup()` | RPC 함수 | 관리자 전용 — DB 전체(학습기록/관리자수정/가입자)를 JSON으로 export |
+| `profiles` | 테이블 | 닉네임, 관심 자격증, 승인여부(`approved`), 등급(`role`) |
+| `admins` | 테이블 | 관리자로 지정된 계정의 user_id 목록 (대시보드 접근 등 진짜 관리자 권한) |
+| `cert_meta` | 테이블 | 자격증별 총 문항수 (랭킹 진도율 계산용, `certs.config.json`과 값이 같아야 함) |
+| `question_overrides` | 테이블 | 관리자/편집자가 고친 문제/정답/이미지 (전체 사용자 공용, cert_id+question_id가 PK) |
+| `question_comments` | 테이블 | 오답의견(문제별 공개 댓글) |
+| `admin_get_summary()` | RPC | 관리자 전용 — 자격증별 사용자 수·용량 요약 |
+| `admin_get_user_stats()` | RPC | 관리자 전용 — 계정별 닉네임·등급·가입일·최근활동·용량 상세 |
+| `admin_get_pending_approvals()` | RPC | 관리자 전용 — 승인 대기 중인 가입자 목록 |
+| `admin_set_approval(user_id, approved)` | RPC | 관리자 전용 — 가입 승인/거절 처리 |
+| `admin_get_commented_questions()` | RPC | 관리자 전용 — 오답의견 달린 문제 목록(최신순) |
+| `admin_export_backup()` | RPC | 관리자 전용 — DB 전체를 JSON으로 export |
+| `get_rankings()` | RPC | 로그인 사용자 전체 — 3개 자격증 합산 랭킹(풀이수/정답률/진도율/종합) |
+| `get_cert_rankings()` | RPC | 로그인 사용자 전체 — 자격증별 전체 순위(풀이수/정답률/진도율) |
+| `get_cert_top_rankers()` | RPC | 로그인 사용자 전체 — 자격증별 TOP3만 (허브 카드 표시용) |
+| `shorten-url` | Edge Function | 링크 단축 중계(서버 대 서버라 CORS 문제 없음). is.gd→v.gd 순서로 시도, 둘 다 실패하면 원본 링크 반환 |
 
-이 함수들은 모두 `SECURITY DEFINER`로 만들어져 있고, 함수 맨 앞에서
+관리자 전용 RPC들은 모두 `SECURITY DEFINER`로 만들어져 있고, 함수 맨 앞에서
 `auth.uid()`가 `admins` 테이블에 있는지 직접 확인해서 관리자가 아니면 예외를 던짐.
 **즉 권한 체크가 앱 코드가 아니라 DB 쪽에 있어서**, admin.html 주소를 직접 열어도
 관리자가 아니면 데이터가 안 나옴.
 
 ---
+
+## 3-1. GitHub Pages 배포 문제 (한 번 실제로 겪었음 — 꼭 읽어볼 것)
+
+**증상**: `main`에 아무리 push해도 라이브 사이트(challenge60.github.io/do/)가 몇 시간~며칠 전
+상태에서 전혀 안 바뀜. 캐시 문제인 줄 알고 한참 헤맸으나 실제 원인은 따로 있었음.
+
+**원인**: GitHub 저장소 Settings → Pages → **"Build and deployment" → "Source"**가 어느 시점에
+`"Deploy from a branch"`가 아니라 **`"GitHub Actions"`**로 바뀌어 있었음. 이 저장소엔 Actions
+워크플로 파일이 없어서, Source가 이렇게 되어 있으면 **아무리 push해도 실제 배포가 전혀 트리거되지 않음**
+(과거에 마지막으로 "Deploy from a branch"였을 때 배포된 상태로 영구히 멈춰있게 됨).
+
+**확인 방법**: `https://github.com/challenge60/do/settings/pages`에서 Source 확인.
+`main` / `(root)`로 되어 있어야 정상.
+
+API로도 확인 가능 (단, 인증 없인 요청 제한에 잘 걸리므로 PAT로 인증해서 호출 권장):
+```bash
+curl -s -H "Authorization: token <PAT>" -H "Accept: application/vnd.github+json" \
+  "https://api.github.com/repos/challenge60/do/pages"
+# source.branch가 "main"인지 확인
+
+curl -s -H "Authorization: token <PAT>" -H "Accept: application/vnd.github+json" \
+  "https://api.github.com/repos/challenge60/do/pages/builds/latest"
+# commit 필드가 방금 push한 커밋 해시와 같은지, status가 "built"인지 확인
+```
+
+**해결**: Source를 "Deploy from a branch"로 되돌리고 branch를 `main`으로 선택 후 저장.
+**주의**: 이렇게 설정만 바꿔도 자동으로 재빌드되지 않음 — 새로 커밋 하나를 push해야
+그 시점부터 다시 정상적으로 빌드됨 (설정 변경 자체는 재빌드 트리거가 아님).
+
+이 사고 때문에 그날 세션 안에서 수많은 기능(로그인 방식 변경, 관리자 대시보드 등)이
+전부 push까지는 됐는데 실제 사이트엔 한참 반영이 안 됐던 적이 있음. **앞으로 "분명 코드는
+고쳤는데 실제 화면엔 하나도 안 바뀐다"는 신고가 오면 캐시보다 먼저 이걸 의심할 것.**
+
+---
+
+## 3-2. 캐시 관련 대응 (이미 되어 있음)
+
+- **CSS/JS 파일**: `build-hub.js`의 `addCacheBusting()`이 파일 내용 기반 MD5 해시를
+  `?v=xxxxxxxx` 형태로 자동으로 붙여줌. 파일이 바뀌면 해시도 바뀌어서 브라우저가 무조건
+  새로 받아감. 사람이 버전을 수동으로 관리할 필요 없음.
+- **HTML 문서 자체**: `index.html`, `admin.html`, `ranking.html`, 각 자격증 페이지,
+  standalone 배포본 전부에 `Cache-Control: no-cache` 계열 메타태그가 들어있음.
+  (메타태그는 실제 HTTP 헤더보다 약하지만, GitHub Pages는 커스텀 헤더 설정을 지원 안 해서
+  이게 최선. 그래도 안 바뀌면 하드 리프레시나 캐시 삭제 필요할 수 있음)
+
+
 
 ## 4. 관리자 시스템 (문제 데이터 수정 & 대시보드)
 
