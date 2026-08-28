@@ -8,6 +8,24 @@ function escapeHtml(s) {
   }[c]));
 }
 
+/* ============ 짧은 공유 링크 처리: ?q=<shortCode>-<문항ID> ============
+   예: challenge60.github.io/do/?q=a-2026-1-11 → certs/arch-siljak/index.html?q=2026-1-11 로 이동
+   외부 단축 서비스(is.gd 등)에 기대지 않고, 허브 자체 주소만으로 짧은 링크를 만들기 위함.
+   shortCode는 assets/certs-registry.js에 자격증별로 지정되어 있음(a/b/c).
+   반환값 true면 리다이렉트를 시작한 것이므로, 호출한 쪽에서 boot()를 생략해야 함. */
+function handleShortDeepLinkIfAny() {
+  const qParam = new URLSearchParams(location.search).get("q");
+  if (!qParam) return false;
+  const dashIdx = qParam.indexOf("-");
+  if (dashIdx === -1) return false;
+  const shortCode = qParam.slice(0, dashIdx);
+  const questionId = qParam.slice(dashIdx + 1);
+  const cert = (typeof CERTS_REGISTRY !== "undefined" ? CERTS_REGISTRY : []).find((c) => c.shortCode === shortCode);
+  if (!cert) return false;
+  window.location.replace(`${cert.path}?q=${encodeURIComponent(questionId)}`);
+  return true;
+}
+
 /* ============ PWA 설치("My도전" 허브 자체를 홈 화면 앱으로) ============
    각 자격증 페이지(engine/app.js)와 완전히 별개의 PWA로 설치되도록, id/scope를
    허브 경로("/") 기준으로 잡는다. 자격증별 앱과 이름·아이콘이 겹치지 않는다. */
@@ -654,9 +672,14 @@ async function proceedAfterLogin(session) {
 }
 
 async function boot() {
+  if (handleShortDeepLinkIfAny()) return; // 리다이렉트 중이므로 나머지 부트 과정 생략
   const tokenHashParams = getTokenHashParams();
   if (tokenHashParams) {
     renderConfirm(tokenHashParams);
+    return;
+  }
+  if (!supabaseClient) {
+    root.innerHTML = `<div class="login-screen"><div class="login-card"><p class="login-status err">서비스 연결에 실패했어요. 새로고침해주세요.</p></div></div>`;
     return;
   }
   const authError = parseAuthErrorFromUrl();
@@ -669,13 +692,18 @@ async function boot() {
   }
 }
 
-supabaseClient.auth.onAuthStateChange(async (event, session) => {
-  if (event === "SIGNED_IN" && session) {
-    await applyPendingProfileIfAny(session.user.id);
-    await proceedAfterLogin(session);
-  } else if (event === "SIGNED_OUT") {
-    renderLogin();
-  }
-});
+// supabaseClient가 null일 수 있음(CDN 로딩 실패 등, assets/supabase-client.js 참고).
+// 이 최상위 호출이 예외를 던지면 바로 아래의 boot() 자체가 실행이 안 돼서 페이지 전체가
+// 먹통이 되므로, null이면 조용히 건너뛴다.
+if (supabaseClient) {
+  supabaseClient.auth.onAuthStateChange(async (event, session) => {
+    if (event === "SIGNED_IN" && session) {
+      await applyPendingProfileIfAny(session.user.id);
+      await proceedAfterLogin(session);
+    } else if (event === "SIGNED_OUT") {
+      renderLogin();
+    }
+  });
+}
 
 boot();
