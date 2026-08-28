@@ -1508,6 +1508,15 @@ function setView(v){
     voicePhase = null;
     releaseWakeLockNow();
   }
+  // 모의고사 화면(설정 화면이든, 실제 응시 중이든 state.view는 계속 "exam")을 벗어나는데
+  // 타이머가 아직 돌고 있으면 멈춘다. 안 멈추면 다른 메뉴로 이동해도 백그라운드에서 타이머가
+  // 계속 흐르면서 60초마다 자동저장(동기화 알림)을 반복 트리거하는 문제가 있었음.
+  // 진행상황·남은시간은 이미 저장되어 있어서, 나중에 "이어서 하기"로 정확히 이어서 풀 수 있다.
+  if(state.view === "exam" && v !== "exam" && state.examTimer){
+    clearInterval(state.examTimer);
+    state.examTimer = null;
+    saveExamSession();
+  }
   state.view = v;
   document.querySelectorAll("nav.bottom button").forEach(b=>b.classList.toggle("on", b.dataset.view===v));
   const appEl0 = document.getElementById("app");
