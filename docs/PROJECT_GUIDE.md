@@ -194,6 +194,18 @@ insert into public.admins (user_id)
 select id from auth.users where email = '등록할이메일@example.com';
 ```
 
+### 회원 등급 (관리자/편집자/일반/우수회원)
+
+`profiles.role` 컬럼(기본값 `general`)으로 관리. **`admins` 테이블과는 별개 시스템**:
+- `admins` 테이블 = 진짜 권한(관리자 대시보드 접근, 승인 대기 처리, 백업 등) — 이건 SQL로만 부여
+- `profiles.role` = 관리자 대시보드의 "계정별 상세" 표에서 드롭다운으로 아무나 쉽게 바꿀 수 있는
+  **명칭 겸 부분 권한**. 값은 4가지: `admin`(관리자) / `editor`(편집자) / `general`(일반) / `excellent`(우수회원)
+- **실질적 효과가 있는 건 `editor`(및 `role='admin'`)뿐**: 문제 수정 시 "전체 사용자 기본값으로
+  적용" 확인창이 뜨고 `question_overrides`에 쓸 수 있게 됨 (`admins` 테이블 없이도 가능).
+  `general`/`excellent`는 순수 명칭 표시 목적으로, 기능적으로는 차이 없음
+- 관련 코드: `assets/storage.js`의 `window.canPublishOverride`(= isAdmin OR role이 editor/admin),
+  `engine/app.js`의 `maybeAskAdminPublish()`가 이 플래그를 확인
+
 ### 관리자가 문제를 고치는 흐름
 
 1. 관리자 계정으로 허브(`do`) 로그인 → 평소와 똑같은 편집 UI(연필 아이콘)로 문제/정답/이미지 수정
@@ -220,9 +232,21 @@ select id from auth.users where email = '등록할이메일@example.com';
   로컬 사본을 챙길 수 있게 만든 것
 - **코드 백업 링크**: 4개 저장소(do/a/b/c) 각각 GitHub ZIP 다운로드 링크
   (코드는 git 커밋마다 이미 버전 관리되고 있지만, 만약을 위한 로컬 사본용)
+- **🔔 승인 대기 중인 가입자**: 새로 회원가입한 사람 목록(닉네임/이메일/관심자격증/가입일) +
+  승인·거절 버튼. 아래 "회원가입·로그인 시스템" 섹션 참고
+- **💬 오답의견 올라온 문제**: 최신순으로 문제별 댓글 개수·미리보기 + "문제로 이동" 딥링크
+  (`?q=문항ID` 파라미터로 그 문제만 바로 여는 기능, `engine/app.js` 최하단에 구현)
 
 관련 파일: `admin.html`, `assets/admin.js`, `assets/admin.css`
 (engine 빌드 대상 아님 — hub.js/hub.css처럼 `do` 저장소에서 직접 수정)
+
+### 설정 화면의 로컬 백업/복원 메뉴 (허브에서는 관리자 전용)
+
+`engine/app.js`의 설정 화면에 있는 "학습데이터만 백업" / "외부데이터 복원"(로컬 JSON
+파일 기반, standalone용으로 원래 있던 기능)은 **허브에서는 진짜 관리자(`window.isAdmin`)
+에게만 노출**됨. 일반 사용자는 이미 클라우드 자동 동기화가 있어서 필요 없고, 잘못된 파일을
+복원하면 클라우드 학습기록을 덮어쓸 위험이 있어 숨김. standalone(a/b/c)에는 그대로 노출됨
+(Supabase 자체가 없어 클라우드 동기화 개념이 없기 때문).
 
 ### 백업 습관 권장
 
@@ -235,7 +259,60 @@ select id from auth.users where email = '등록할이메일@example.com';
 
 ---
 
-## 5. PWA 설치 관련 알려진 제약사항 (중요)
+## 5. 회원가입 · 로그인 시스템
+
+### 이메일+비밀번호 방식 (매직링크 아님)
+
+원래 이메일 매직링크 방식이었으나, **Supabase 기본 메일 서버의 시간당 발송 한도가
+너무 낮아서(시간당 2~4통 수준) 실사용이 어려워** 이메일+비밀번호 방식으로 전환함.
+- 회원가입 시 이메일 발송 자체가 없음 (Supabase 대시보드 → Authentication → Sign In / Providers →
+  Email → **"Confirm email"을 꺼둔 상태**이기 때문. 다시 켜면 최초 가입 시 1통은 발송됨)
+- 로그인은 이메일 발송이 전혀 없음 (`signInWithPassword`)
+- 비밀번호 변경: 허브 사용자 정보 줄의 "🔑 비밀번호 변경" → 로그인된 상태에서 새 비밀번호만
+  입력하면 바로 변경(기존 비밀번호 확인 불필요, `supabaseClient.auth.updateUser()`)
+- **주의**: 이미 가입(이메일 인증 완료)된 계정에 `signUp()`을 다시 호출하면, 에러 없이 성공
+  응답이 오면서도 실제로는 계정이 새로 안 만들어짐(Supabase가 계정 존재 여부를 노출 안 하려는
+  설계) — `data.user.identities.length === 0`으로 감지해서 "이미 가입된 이메일" 안내를 따로 함
+
+### 회원가입 시 받는 정보
+
+이메일/비밀번호 외에 **닉네임**(필수, 2자 이상, 중복 불가)과 **관심 자격증**(체크박스,
+복수 선택 가능)을 함께 받음. `profiles` 테이블에 저장.
+
+### 관리자 승인제
+
+새로 회원가입하면 **계정은 만들어지지만 관리자가 승인하기 전까지 앱을 못 씀** (`profiles.approved`
+컬럼, 신규 가입자는 기본 `false`). 기존 가입자(이 기능 생기기 전 가입자)는 컬럼 기본값이
+`true`라 자동으로 승인된 것으로 처리됨 — 소급 적용 안 됨.
+- 로그인 직후 `assets/hub.js`의 `proceedAfterLogin()`이 공통 관문 역할: `approved===false`면
+  목록 화면 대신 "가입 승인 대기 중" 화면만 보여주고 로그아웃 버튼만 제공
+- 관리자 대시보드 최상단 "🔔 승인 대기 중인 가입자" 표에서 승인/거절 처리
+  (`admin_get_pending_approvals()` / `admin_set_approval()` RPC)
+- 거절해도 계정 삭제는 안 되고 `approved=false`로 남아 나중에 다시 승인 가능
+
+### 브랜드 네이밍 통일
+
+- 허브(로그인/목록/관리자/랭킹): 배지 **"My도전"** + 텍스트 **"Note"**
+- 각 자격증 페이지: 배지가 자격증명 대신 통일된 **"My도전"**, 텍스트는 **"{자격증} {실기|필답형}"**
+  (예: "My도전. 건축기사 실기", "My도전. 산업안전기사 필답형")
+- 공유(이미지/텍스트) 카드 헤더는 항상 **"My도전 Note"**로 고정, 그 아래 줄에 자격증·단원·회차
+- 관련 코드: `engine/app.js`의 `applyExamConfig()` + `SHORT_SUB_BY_CERT` 매핑 표
+  (CERT_ID 기준으로 "실기"/"필답형" 판단). 새 자격증 추가 시 이 표에도 항목을 추가해야
+  브랜드 텍스트가 정확히 나옴 (안 넣으면 `cfg.subtitle` 원문 그대로 폴백됨)
+
+### 문제 공유 시 단축 링크
+
+공유(이미지·텍스트)에 "이 문제 바로 보기" 링크가 자동으로 붙음. 문제마다 `?q=문항ID`
+딥링크를 만들고(엔진 최하단에 딥링크 처리 코드 있음), Supabase **Edge Function
+`shorten-url`**을 경유해서 짧게 변환함.
+- 브라우저가 외부 단축 서비스(is.gd 등)를 직접 호출하면 CORS로 막히는 경우가 많아서,
+  Edge Function이 서버 대 서버로 대신 호출해줌(브라우저 CORS 정책 자체가 적용 안 됨)
+- Edge Function 내부에서 is.gd 시도 → 실패 시 v.gd 시도 → 그마저 실패하면 원본 긴 링크 그대로 반환
+- **TinyURL의 `api-create.php`는 폐지되어 더 이상 안 씀** (한 번 겪은 실패 사례)
+- standalone(a/b/c)에서도 동일하게 동작 (Edge Function URL을 하드코딩해서 로그인 불필요하게 열어둠,
+  `verify_jwt=false`로 배포됨)
+
+## 6. PWA 설치 관련 알려진 제약사항 (중요)
 
 **"허브(My도전)나 자격증 중 하나를 설치하면 나머지 설치 버튼이 안 뜨는" 현상은 우리 코드
 버그가 아니라 크롬 자체의 알려진 동작입니다.** (참고: web.dev "Build multiple Progressive
@@ -261,7 +338,7 @@ Web Apps on the same domain")
 쓰는 방법뿐인데, 이는 GitHub Pages 무료 호스팅 범위를 벗어나 커스텀 도메인 구매·DNS 설정이
 필요한 큰 변경이라 당장은 하지 않음.
 
-## 6. 닉네임 · 학습 랭킹 · 오답의견
+## 7. 닉네임 · 학습 랭킹 · 오답의견
 
 ### 닉네임 (profiles 테이블)
 - 이메일은 절대 공개되지 않고, 랭킹/오답의견에는 **닉네임**만 표시됨
@@ -279,26 +356,53 @@ Web Apps on the same domain")
   on conflict (cert_id) do update set question_count = excluded.question_count;
   ```
 
+### 학습 랭킹 (ranking.html)
+- **전체(종합)** 탭: 3개 자격증을 합산한 지표 — 풀이수 / 정답률 / 진도율 / 종합점수(진도율+정답률 각 50%)
+  (`get_rankings()` RPC)
+- **종목별 탭**: 자격증을 선택하면 그 자격증 안에서만의 순위 — 풀이수 / 정답률 / 진도율
+  (`get_cert_rankings()` RPC, 종합점수는 없음)
+- 진도율 계산에 쓰이는 전체 문항수는 `cert_meta` 테이블에 있음
+  — **새 자격증을 추가하거나 문항수가 바뀌면 `cert_meta`도 같이 갱신해야 함**:
+  ```sql
+  insert into public.cert_meta (cert_id, question_count) values ('새자격증id', 문항수)
+  on conflict (cert_id) do update set question_count = excluded.question_count;
+  ```
+- 허브 목록 화면의 각 자격증 카드에도 **그 자격증 TOP3**(🥇🥈🥉+닉네임)가 작게 표시됨
+  (`get_cert_top_rankers()` RPC, 카드용으로 딱 3명만 반환하는 경량 버전)
+
 ### 오답의견 (question_comments 테이블)
 - 문제 화면 툴바의 💬 아이콘 → 그 문제를 보는 모든 로그인 사용자에게 공개되는 댓글판
+  (모달은 화면 정가운데에 넓게 뜸)
 - 누구나 읽기 가능, 본인 글만 삭제 가능(관리자는 전체 삭제 가능 — 부적절한 글 관리용)
+- 💬 아이콘 우상단에 그 문제의 오답의견 **개수 뱃지**가 작게 표시됨(0개면 안 보임,
+  등록·삭제 즉시 갱신) — `updateCommentCountBadge()`
 - **허브(do)에서만 동작.** standalone(a/b/c)은 Supabase가 없어서 💬 아이콘 자체가 안 보임
-  (`engine/app.js`에서 `typeof supabaseClient !== "undefined"`로 자동 분기됨, 별도 처리 불필요)
+  (`engine/app.js`에서 `typeof supabaseClient !== "undefined" && supabaseClient`로 자동 분기됨,
+  별도 처리 불필요)
+- 관리자 대시보드에서 오답의견 달린 문제 목록을 보고 "문제로 이동" 클릭 시 `?q=문항ID`
+  딥링크로 그 문제가 바로 열림
 
-## 7. 현재 상태 (기록 시점 기준)
+## 8. 현재 상태 (기록 시점 기준)
 
-- `challenge60/do` 최신 커밋: `afd4632` (닉네임·랭킹·오답의견 추가)
+- `challenge60/do` 최신 커밋: `869cf5f`
 - 관리자 계정: `smckwz@gmail.com`
+- Supabase "Confirm email" 설정: **꺼짐** (회원가입 즉시 로그인, 이메일 발송 없음)
+- GitHub Pages 배포: 한 번 "GitHub Actions" 소스로 잘못 바뀌어서 며칠치 배포가 안 된 사고가 있었음
+  → 지금은 "Deploy from a branch" / `main`으로 정상화됨 (자세한 내용은 3-1 참고, 재발 여부 가끔 확인 권장)
 - 이전에 있었던 중대 버그(모두 수정 완료):
   - `app.css` 맨 앞에 문자열 `<style>`이 잘못 남아 있어 전체 CSS 변수가 무효화되던 문제
   - HTML 조각화 과정에서 남은 닫히지 않은 `<script>` 태그로 페이지 파싱이 깨지던 문제
   - PWA 설치 코드 예외처리 누락으로 이후 스크립트 전체가 죽던 문제
+  - `const supabaseClient = ...`가 실패하면 TDZ로 인해 `typeof supabaseClient` 체크마저
+    ReferenceError를 던지던 문제 (`let` + try/catch로 수정)
+  - 공유 카드의 `{{BOX}}` 박스 테두리가 첫 줄 글자를 관통하던 문제 (fillText 베이스라인 오프셋 부족)
+  - 공유 카드에 자격증명이 "건축기사"로 하드코딩되어 다른 자격증에서도 잘못 표시되던 문제
 - LS_KEY(로컬스토리지 키)는 이제 **모든 배포본에서 `CERT_ID` 기반으로 통일**됨
   (예전엔 단독형이 `EXAM_CONFIG.markText` 기반이라 허브와 로직이 갈라져 있었음)
 
 ---
 
-## 8. GitHub 접근 관련
+## 9. GitHub 접근 관련
 
 - 이 작업들은 사용자가 대화 중 GitHub PAT(개인 액세스 토큰)를 제공하면 Claude가
   git clone/commit/push로 직접 처리하는 방식으로 진행되어 왔음
@@ -311,7 +415,7 @@ Web Apps on the same domain")
 
 ---
 
-## 9. 검증 습관 (중요)
+## 10. 검증 습관 (중요)
 
 지난 세션들에서 "고쳤다"는 말만 믿고 실제 확인 없이 넘어갔다가 실제로는
 버그가 있었던 사례가 여러 번 있었습니다. 앞으로 기능을 수정할 때는:
@@ -323,7 +427,7 @@ Web Apps on the same domain")
 
 ---
 
-## 10. 이 문서 관리 원칙
+## 11. 이 문서 관리 원칙
 
 **이 문서는 살아있는 문서입니다.** 새로운 기능을 추가하거나 구조를 바꿀 때마다
 Claude에게 "이것도 매뉴얼에 반영해줘"라고 요청하면, 이 문서를 최신 상태로
