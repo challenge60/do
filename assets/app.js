@@ -6015,7 +6015,7 @@ function insertAtCursor(textarea, text){
   textarea.focus();
 }
 
-/* ---- 이미지 자르기 도구 (드래그로 영역 선택 후 자르기) ---- */
+/* ---- 이미지 자르기 도구 (드래그로 영역 선택 + 모서리/변 핸들로 다시 조정 가능) ---- */
 function openCropTool(src, onApply){
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay crop-overlay";
@@ -6023,10 +6023,19 @@ function openCropTool(src, onApply){
     <div class="modal-box crop-box">
       <span class="close-x">✕</span>
       <h3>이미지 자르기</h3>
-      <p style="font-size:0.78rem;color:var(--muted);">남길 영역을 드래그해서 선택한 뒤 적용하세요.</p>
+      <p style="font-size:0.78rem;color:var(--muted);">영역을 드래그해서 선택하고, 모서리·변의 동그란 점을 잡아 다시 조정할 수 있어요. 박스 안쪽을 드래그하면 통째로 옮겨져요.</p>
       <div class="crop-canvas-wrap" id="cropWrap">
         <img id="cropImg" src="${src}" draggable="false">
-        <div class="crop-rect" id="cropRect"></div>
+        <div class="crop-rect" id="cropRect">
+          <div class="crop-handle nw" data-h="nw"></div>
+          <div class="crop-handle n" data-h="n"></div>
+          <div class="crop-handle ne" data-h="ne"></div>
+          <div class="crop-handle w" data-h="w"></div>
+          <div class="crop-handle e" data-h="e"></div>
+          <div class="crop-handle sw" data-h="sw"></div>
+          <div class="crop-handle s" data-h="s"></div>
+          <div class="crop-handle se" data-h="se"></div>
+        </div>
       </div>
       <div class="btn-row" style="margin-top:14px;">
         <button class="btn ghost" id="cropReset">전체 선택</button>
@@ -6038,6 +6047,7 @@ function openCropTool(src, onApply){
   const wrap = overlay.querySelector("#cropWrap");
   const rectEl = overlay.querySelector("#cropRect");
   const imgEl = overlay.querySelector("#cropImg");
+  const MIN_SIZE = 0.03; // 너무 작아지지 않도록 최소 크기(비율)
   let rect = {x:0.05, y:0.05, w:0.9, h:0.9};
   const drawRect = ()=>{
     rectEl.style.left = (rect.x*100)+"%";
@@ -6048,33 +6058,76 @@ function openCropTool(src, onApply){
   imgEl.addEventListener("load", drawRect);
   drawRect();
 
-  let dragging=false, startPt=null;
   const ptFromEvent = (e)=>{
     const r = wrap.getBoundingClientRect();
     const cx = (e.touches ? e.touches[0].clientX : e.clientX);
     const cy = (e.touches ? e.touches[0].clientY : e.clientY);
     return { x: Math.min(Math.max((cx-r.left)/r.width,0),1), y: Math.min(Math.max((cy-r.top)/r.height,0),1) };
   };
-  const onDown = (e)=>{ dragging=true; startPt = ptFromEvent(e); rect = {x:startPt.x,y:startPt.y,w:0,h:0}; drawRect(); };
+
+  // mode: null(없음) | "new"(새로 그리기) | "move"(박스 이동) | "nw"/"n"/"ne"/"w"/"e"/"sw"/"s"/"se"(핸들 리사이즈)
+  let mode = null;
+  let startPt = null;
+  let startRect = null;
+
+  const onDown = (e)=>{
+    const handle = e.target.closest && e.target.closest(".crop-handle");
+    startPt = ptFromEvent(e);
+    startRect = {...rect};
+    if(handle){
+      mode = handle.dataset.h;
+    } else if(e.target === rectEl){
+      mode = "move";
+    } else {
+      // 박스 바깥(회색 어두운 영역)을 누르면 그 지점부터 새로 그리기 시작
+      mode = "new";
+      rect = {x:startPt.x, y:startPt.y, w:0, h:0};
+      drawRect();
+    }
+    e.preventDefault && e.preventDefault();
+  };
+
   const onMove = (e)=>{
-    if(!dragging) return;
+    if(!mode) return;
     const p = ptFromEvent(e);
-    rect.x = Math.min(startPt.x, p.x); rect.y = Math.min(startPt.y, p.y);
-    rect.w = Math.abs(p.x-startPt.x); rect.h = Math.abs(p.y-startPt.y);
+    const dx = p.x - startPt.x, dy = p.y - startPt.y;
+
+    if(mode === "new"){
+      rect.x = Math.min(startPt.x, p.x); rect.y = Math.min(startPt.y, p.y);
+      rect.w = Math.abs(p.x-startPt.x); rect.h = Math.abs(p.y-startPt.y);
+    } else if(mode === "move"){
+      const w = startRect.w, h = startRect.h;
+      rect.x = Math.min(Math.max(startRect.x + dx, 0), 1 - w);
+      rect.y = Math.min(Math.max(startRect.y + dy, 0), 1 - h);
+      rect.w = w; rect.h = h;
+    } else {
+      // 핸들 리사이즈: 반대쪽 변/모서리는 고정한 채 잡은 쪽만 움직인다
+      let {x, y, w, h} = startRect;
+      const right = x + w, bottom = y + h;
+      if(mode.includes("w")){ x = Math.min(Math.max(startRect.x + dx, 0), right - MIN_SIZE); w = right - x; }
+      if(mode.includes("e")){ w = Math.min(Math.max(startRect.w + dx, MIN_SIZE), 1 - x); }
+      if(mode.includes("n")){ y = Math.min(Math.max(startRect.y + dy, 0), bottom - MIN_SIZE); h = bottom - y; }
+      if(mode.includes("s")){ h = Math.min(Math.max(startRect.h + dy, MIN_SIZE), 1 - y); }
+      rect = {x, y, w, h};
+    }
     drawRect();
   };
-  const onUp = ()=>{ dragging=false; };
+  const onUp = ()=>{ mode = null; };
+
   wrap.addEventListener("mousedown", onDown);
-  wrap.addEventListener("mousemove", onMove);
+  window.addEventListener("mousemove", onMove);
   window.addEventListener("mouseup", onUp);
-  wrap.addEventListener("touchstart", onDown, {passive:true});
-  wrap.addEventListener("touchmove", onMove, {passive:true});
-  wrap.addEventListener("touchend", onUp);
+  wrap.addEventListener("touchstart", onDown, {passive:false});
+  window.addEventListener("touchmove", onMove, {passive:false});
+  window.addEventListener("touchend", onUp);
 
   const close = ()=>{
     wrap.removeEventListener("mousedown", onDown);
-    wrap.removeEventListener("mousemove", onMove);
+    window.removeEventListener("mousemove", onMove);
     window.removeEventListener("mouseup", onUp);
+    wrap.removeEventListener("touchstart", onDown);
+    window.removeEventListener("touchmove", onMove);
+    window.removeEventListener("touchend", onUp);
     overlay.remove();
   };
   overlay.querySelector(".close-x").addEventListener("click", close);
