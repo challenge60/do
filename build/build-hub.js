@@ -34,6 +34,19 @@ function log(msg) {
   console.log(`[build-hub] ${msg}`);
 }
 
+// ---------- APP_VERSION 자동 갱신 ----------
+// engine/app.js 안의 'const APP_VERSION = "..."'을 빌드 시점의 타임스탬프로 자동 교체한다.
+// 이걸 수동으로 관리하면(전에 그랬던 것처럼) 매번 깜빡하기 쉽고, 그러면 화면 하단 버전
+// 표시가 안 바뀌는 것뿐 아니라 앱에 이미 내장된 "새 버전 나왔어요" 자동 알림 배너
+// (checkForNewVersion, engine/app.js 하단)도 조용히 무력화된다 — 버전 문자열이 그대로면
+// "달라졌다"고 감지할 방법이 없기 때문. 그래서 빌드할 때마다 무조건 새로 찍히게 만든다.
+function stampAppVersion(jsContent) {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, "0");
+  const stamp = `${d.getFullYear()}.${p(d.getMonth()+1)}.${p(d.getDate())}_${p(d.getHours())}.${p(d.getMinutes())}`;
+  return jsContent.replace(/const APP_VERSION = "[^"]*"/, `const APP_VERSION = "${stamp}"`);
+}
+
 // ---------- 캐시 무효화(cache-busting) ----------
 // 브라우저가 assets/app.css, assets/hub.js 같은 파일을 예전 버전으로 캐시해둔 채 계속 쓰는
 // 문제를 막기 위해, HTML 안의 <link>/<script> 경로에 파일 내용 기반 해시(?v=xxxxxxxx)를 붙인다.
@@ -64,8 +77,9 @@ function main() {
   const appJsDst = path.join(ASSETS_DIR, 'app.js');
   const appCssDst = path.join(ASSETS_DIR, 'app.css');
 
-  fs.copyFileSync(appJsSrc, appJsDst);
-  log(`app.js  복사 완료 -> ${path.relative(ROOT, appJsDst)}`);
+  const stampedAppJs = stampAppVersion(fs.readFileSync(appJsSrc, 'utf8'));
+  fs.writeFileSync(appJsDst, stampedAppJs, 'utf8');
+  log(`app.js  복사 완료 (버전 타임스탬프 자동 갱신) -> ${path.relative(ROOT, appJsDst)}`);
   fs.copyFileSync(appCssSrc, appCssDst);
   log(`app.css 복사 완료 -> ${path.relative(ROOT, appCssDst)}`);
 

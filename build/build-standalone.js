@@ -91,7 +91,13 @@ function buildOne(cert, appCss, appJs, bodyTemplate) {
 function main() {
   const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
   const appCss = fs.readFileSync(path.join(ENGINE_DIR, 'app.css'), 'utf8');
-  const appJs = fs.readFileSync(path.join(ENGINE_DIR, 'app.js'), 'utf8');
+  // build-hub.js와 동일하게 빌드 시점 타임스탬프를 APP_VERSION에 자동으로 찍어서,
+  // 화면 버전 표시와 "새 버전 나왔어요" 자동 알림 배너가 매 배포마다 정확히 갱신되게 한다.
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, "0");
+  const stamp = `${d.getFullYear()}.${p(d.getMonth()+1)}.${p(d.getDate())}_${p(d.getHours())}.${p(d.getMinutes())}`;
+  const appJs = fs.readFileSync(path.join(ENGINE_DIR, 'app.js'), 'utf8')
+    .replace(/const APP_VERSION = "[^"]*"/, `const APP_VERSION = "${stamp}"`);
   const bodyTemplate = fs.readFileSync(
     path.join(ENGINE_DIR, 'standalone-body-template.html'),
     'utf8'
