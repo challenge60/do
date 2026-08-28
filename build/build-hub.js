@@ -40,11 +40,17 @@ function log(msg) {
 // 표시가 안 바뀌는 것뿐 아니라 앱에 이미 내장된 "새 버전 나왔어요" 자동 알림 배너
 // (checkForNewVersion, engine/app.js 하단)도 조용히 무력화된다 — 버전 문자열이 그대로면
 // "달라졌다"고 감지할 방법이 없기 때문. 그래서 빌드할 때마다 무조건 새로 찍히게 만든다.
-function stampAppVersion(jsContent) {
-  const d = new Date();
+// ⚠️ 이 빌드 스크립트가 실행되는 서버(샌드박스)의 시스템 시간대는 UTC라서, new Date()를
+// 그냥 쓰면 한국 시간보다 9시간 느리게 찍힌다. 실행 환경 시간대와 무관하게 항상 KST(UTC+9)
+// 기준으로 계산하도록 명시적으로 처리한다.
+function kstStamp() {
+  const utcMs = Date.now();
+  const kst = new Date(utcMs + 9 * 60 * 60 * 1000); // UTC 기준 밀리초에 9시간을 더한 뒤 UTC 게터로 읽으면 KST가 됨
   const p = (n) => String(n).padStart(2, "0");
-  const stamp = `${d.getFullYear()}.${p(d.getMonth()+1)}.${p(d.getDate())}_${p(d.getHours())}.${p(d.getMinutes())}`;
-  return jsContent.replace(/const APP_VERSION = "[^"]*"/, `const APP_VERSION = "${stamp}"`);
+  return `${kst.getUTCFullYear()}.${p(kst.getUTCMonth()+1)}.${p(kst.getUTCDate())}_${p(kst.getUTCHours())}.${p(kst.getUTCMinutes())}`;
+}
+function stampAppVersion(jsContent) {
+  return jsContent.replace(/const APP_VERSION = "[^"]*"/, `const APP_VERSION = "${kstStamp()}"`);
 }
 
 // ---------- 캐시 무효화(cache-busting) ----------

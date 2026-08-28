@@ -93,9 +93,10 @@ function main() {
   const appCss = fs.readFileSync(path.join(ENGINE_DIR, 'app.css'), 'utf8');
   // build-hub.js와 동일하게 빌드 시점 타임스탬프를 APP_VERSION에 자동으로 찍어서,
   // 화면 버전 표시와 "새 버전 나왔어요" 자동 알림 배너가 매 배포마다 정확히 갱신되게 한다.
-  const d = new Date();
+  // 빌드 서버(샌드박스) 시스템 시간대가 UTC라서, 실행 환경과 무관하게 KST(UTC+9)로 명시 계산한다.
+  const kstNow = new Date(Date.now() + 9 * 60 * 60 * 1000);
   const p = (n) => String(n).padStart(2, "0");
-  const stamp = `${d.getFullYear()}.${p(d.getMonth()+1)}.${p(d.getDate())}_${p(d.getHours())}.${p(d.getMinutes())}`;
+  const stamp = `${kstNow.getUTCFullYear()}.${p(kstNow.getUTCMonth()+1)}.${p(kstNow.getUTCDate())}_${p(kstNow.getUTCHours())}.${p(kstNow.getUTCMinutes())}`;
   const appJs = fs.readFileSync(path.join(ENGINE_DIR, 'app.js'), 'utf8')
     .replace(/const APP_VERSION = "[^"]*"/, `const APP_VERSION = "${stamp}"`);
   const bodyTemplate = fs.readFileSync(
