@@ -17,7 +17,7 @@ const CERTS_REGISTRY = [
     name: "방수산업기사 실기",
     subtitle: "필답형 · 방수시공",
     path: "certs/waterproof-siljak/index.html",
-    questionCount: 159,
+    questionCount: 161,
     shortCode: "b",
   },
   {
