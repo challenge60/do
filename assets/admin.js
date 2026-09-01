@@ -191,20 +191,32 @@ async function renderDashboard() {
     </tr>`).join("");
 
   const ROLE_LABELS = { admin: "관리자", editor: "편집자", general: "일반", excellent: "우수회원" };
+  const allCerts = typeof CERTS_REGISTRY !== "undefined" ? CERTS_REGISTRY : [];
   const userRows = userStats.map((u) => `
     <tr data-user-id="${escapeHtml(u.user_id)}">
-      <td>${escapeHtml(u.nickname || "(닉네임 없음)")}</td>
+      <td>${escapeHtml(u.nickname || "(닉네임 없음)")}${u.suspended ? ' <span style="color:var(--rose,#c0392b);font-size:11px;font-weight:800;">[정지중]</span>' : ""}</td>
       <td>${escapeHtml(u.email || "(이메일 없음)")}</td>
       <td>
         <select class="role-select" style="border:1px solid var(--line);border-radius:6px;padding:4px 6px;font-size:12px;background:#fff;">
           ${Object.entries(ROLE_LABELS).map(([val, label]) => `<option value="${val}" ${u.role === val ? "selected" : ""}>${label}</option>`).join("")}
         </select>
+        <div class="editor-certs-box" style="margin-top:4px;${u.role === "editor" ? "" : "display:none;"}">
+          ${allCerts.map((c) => `
+            <label style="display:block;font-size:11px;white-space:nowrap;">
+              <input type="checkbox" class="editor-cert-chk" value="${escapeHtml(c.id)}" ${(u.editor_certs || []).includes(c.id) ? "checked" : ""}>
+              ${escapeHtml(c.name)}
+            </label>`).join("")}
+        </div>
       </td>
       <td>${(u.interested_certs || []).map(certLabel).map(escapeHtml).join(", ") || "—"}</td>
       <td>${fmtDate(u.signed_up_at)}</td>
       <td>${fmtDate(u.last_active_at)}</td>
       <td>${(u.certs_used || []).map(certLabel).map(escapeHtml).join(", ") || "—"}</td>
       <td class="num">${fmtBytes(u.total_bytes)}</td>
+      <td>
+        <button type="button" class="user-action-btn suspend-btn" style="font-size:11px;padding:5px 8px;border-radius:6px;border:1px solid ${u.suspended ? "var(--teal)" : "var(--rose,#c0392b)"};background:#fff;color:${u.suspended ? "var(--teal)" : "var(--rose,#c0392b)"};cursor:pointer;white-space:nowrap;margin-bottom:4px;">${u.suspended ? "정지 해제" : "활동 정지"}</button>
+        <button type="button" class="user-action-btn resetpw-btn" style="font-size:11px;padding:5px 8px;border-radius:6px;border:1px solid var(--amber);background:#fff;color:var(--amber);cursor:pointer;white-space:nowrap;">임시 비번 발급</button>
+      </td>
     </tr>`).join("");
 
   const commentRows = commentedQuestions.map((row) => {
@@ -283,8 +295,8 @@ async function renderDashboard() {
       <p class="admin-section-title">계정별 상세 (용량 많은 순)</p>
       <div class="admin-table-wrap">
         <table class="admin-table">
-          <thead><tr><th>닉네임</th><th>이메일</th><th>등급</th><th>관심 자격증</th><th>가입일</th><th>최근 활동</th><th>사용 중인 자격증</th><th>사용 용량</th></tr></thead>
-          <tbody>${userRows || `<tr><td colspan="8" class="admin-empty">가입자가 없습니다</td></tr>`}</tbody>
+          <thead><tr><th>닉네임</th><th>이메일</th><th>등급</th><th>관심 자격증</th><th>가입일</th><th>최근 활동</th><th>사용 중인 자격증</th><th>사용 용량</th><th>관리</th></tr></thead>
+          <tbody>${userRows || `<tr><td colspan="9" class="admin-empty">가입자가 없습니다</td></tr>`}</tbody>
         </table>
       </div>
 
@@ -353,6 +365,8 @@ async function renderDashboard() {
       const row = sel.closest("tr");
       const userId = row.dataset.userId;
       const newRole = sel.value;
+      const editorBox = row.querySelector(".editor-certs-box");
+      if (editorBox) editorBox.style.display = newRole === "editor" ? "" : "none";
       sel.disabled = true;
       try {
         const { error } = await supabaseClient.from("profiles").update({ role: newRole }).eq("user_id", userId);
@@ -361,6 +375,69 @@ async function renderDashboard() {
         alert("등급 변경 실패: " + e.message);
       } finally {
         sel.disabled = false;
+      }
+    });
+  });
+  document.querySelectorAll(".editor-cert-chk").forEach((chk) => {
+    chk.addEventListener("change", async () => {
+      const row = chk.closest("tr");
+      const userId = row.dataset.userId;
+      const checkedCerts = Array.from(row.querySelectorAll(".editor-cert-chk:checked")).map((el) => el.value);
+      chk.disabled = true;
+      try {
+        const { error } = await supabaseClient.from("profiles").update({ editor_certs: checkedCerts }).eq("user_id", userId);
+        if (error) throw error;
+      } catch (e) {
+        alert("편집 가능 종목 변경 실패: " + e.message);
+      } finally {
+        chk.disabled = false;
+      }
+    });
+  });
+  document.querySelectorAll(".suspend-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const row = btn.closest("tr");
+      const userId = row.dataset.userId;
+      const willSuspend = btn.textContent.trim() === "활동 정지";
+      if (willSuspend && !confirm("이 계정의 로그인·이용을 정지할까요? (나중에 다시 해제할 수 있어요)")) return;
+      btn.disabled = true;
+      try {
+        const { error } = await supabaseClient.rpc("admin_set_suspended", { target_user_id: userId, suspended: willSuspend });
+        if (error) throw error;
+        btn.textContent = willSuspend ? "정지 해제" : "활동 정지";
+        btn.style.borderColor = willSuspend ? "var(--teal)" : "var(--rose,#c0392b)";
+        btn.style.color = willSuspend ? "var(--teal)" : "var(--rose,#c0392b)";
+        const nickCell = row.querySelector("td");
+        const badge = nickCell.querySelector("span");
+        if (willSuspend && !badge) {
+          nickCell.insertAdjacentHTML("beforeend", ' <span style="color:var(--rose,#c0392b);font-size:11px;font-weight:800;">[정지중]</span>');
+        } else if (!willSuspend && badge) {
+          badge.remove();
+        }
+      } catch (e) {
+        alert("처리 실패: " + e.message);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  });
+  document.querySelectorAll(".resetpw-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const row = btn.closest("tr");
+      const userId = row.dataset.userId;
+      const chars = "abcdefghjkmnpqrstuvwxyz23456789";
+      let tempPw = "";
+      for (let i = 0; i < 8; i++) tempPw += chars[Math.floor(Math.random() * chars.length)];
+      if (!confirm(`이 계정의 비밀번호를 임시 비밀번호로 바꿀까요?\n\n임시 비밀번호: ${tempPw}\n\n(확인을 누르면 바로 적용돼요. 이 비밀번호를 사용자에게 전달해주세요)`)) return;
+      btn.disabled = true;
+      try {
+        const { error } = await supabaseClient.rpc("admin_reset_password", { target_user_id: userId, new_password: tempPw });
+        if (error) throw error;
+        alert(`임시 비밀번호가 발급됐어요:\n\n${tempPw}\n\n이 비밀번호를 사용자에게 전달해주세요. (사용자는 로그인 후 '비밀번호 변경'으로 원하는 비밀번호로 바꿀 수 있어요)`);
+      } catch (e) {
+        alert("임시 비밀번호 발급 실패: " + e.message);
+      } finally {
+        btn.disabled = false;
       }
     });
   });

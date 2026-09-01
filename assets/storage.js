@@ -125,19 +125,19 @@
     }
   }
 
-  // ---------- 회원 등급 확인 (편집자는 관리자처럼 문제 수정 전체 적용 가능) ----------
-  async function fetchMemberRole(userId) {
+  // ---------- 회원 등급 확인 (편집자는 지정된 종목에 한해 문제 수정 전체 적용 가능) ----------
+  async function fetchMemberRoleInfo(userId) {
     try {
       const { data, error } = await supabaseClient
         .from("profiles")
-        .select("role")
+        .select("role, editor_certs")
         .eq("user_id", userId)
         .maybeSingle();
       if (error) throw error;
-      return data ? data.role : "general";
+      return data ? { role: data.role, editorCerts: data.editor_certs || [] } : { role: "general", editorCerts: [] };
     } catch (e) {
       console.warn("회원 등급 확인 실패:", e.message);
-      return "general";
+      return { role: "general", editorCerts: [] };
     }
   }
 
@@ -200,9 +200,12 @@
     // 0) 관리자 수정 오버레이를 먼저 불러와 둔다 (모든 로그인 사용자 대상)
     await loadAdminOverrides();
     window.isAdmin = await checkIsAdmin(userId);
-    const memberRole = await fetchMemberRole(userId);
-    // '문제 수정 전체 적용' 기능은 관리자뿐 아니라 편집자 등급도 사용 가능
-    window.canPublishOverride = window.isAdmin || memberRole === "editor" || memberRole === "admin";
+    const memberRoleInfo = await fetchMemberRoleInfo(userId);
+    // '문제 수정 전체 적용' 기능: 관리자는 항상 가능, 편집자는 이 자격증(CERT_ID)이
+    // 본인의 editor_certs 목록에 포함되어 있을 때만 가능 (종목별 편집 권한)
+    window.canPublishOverride = window.isAdmin
+      || memberRoleInfo.role === "admin"
+      || (memberRoleInfo.role === "editor" && typeof CERT_ID !== "undefined" && memberRoleInfo.editorCerts.includes(CERT_ID));
 
     // 1) 클라우드 기록 반영 (있으면 로컬보다 우선 — 다른 기기에서 이어 학습하는 경우 대비)
     const cloud = await pullFromCloud(userId);
