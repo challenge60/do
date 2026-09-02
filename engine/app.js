@@ -2925,11 +2925,17 @@ function renderCard(){
   // 관리자 전용: 이 문항이 "전체 적용됨"(발행된 관리자 수정)인지, 아니면 "내 개인 수정만 있고
   // 아직 전체 적용은 안 됨"인지 한눈에 구분하기 위한 배지. 개인 수정 상태를 확인 안 하고
   // '전체 적용'을 눌렀다고 착각한 채 넘어가는 실수를 방지하기 위해 추가.
+  // 발행본과 로컬 수정이 둘 다 있을 때는, 그 둘의 실제 '내용'이 같은지까지 비교해서
+  // 표시한다(단순히 둘 다 있다는 사실만으로는 재발행이 필요한지 알 수 없어 헷갈렸음).
   const editStatusTag = (typeof window !== "undefined" && window.isAdmin) ? (()=>{
-    const hasAdminOv = !!adminOverrideFor(q.id);
-    const hasLocalEdit = !!(store.edits && store.edits[q.id]);
+    const adminOv = adminOverrideFor(q.id);
+    const localEdit = store.edits && store.edits[q.id];
+    const hasAdminOv = !!adminOv, hasLocalEdit = !!localEdit;
+    const FIELDS = ["question","answer","images","tags","unitMajor","unitMinor"];
+    const sameContent = hasAdminOv && hasLocalEdit &&
+      FIELDS.every(f => JSON.stringify(adminOv[f]) === JSON.stringify(localEdit[f]));
     if(hasLocalEdit && !hasAdminOv) return `<span class="tag" style="background:#fdecea;color:#c0392b;border:1px solid #e8a49b;">⚠️ 개인 수정만 있음(전체 미적용)</span>`;
-    if(hasAdminOv && hasLocalEdit) return `<span class="tag" style="background:#e8f4ea;color:#1e7a3c;border:1px solid #a6d9b3;">🌐 전체 적용됨 · 내 수정 있음</span>`;
+    if(hasAdminOv && hasLocalEdit && !sameContent) return `<span class="tag" style="background:#fdecea;color:#c0392b;border:1px solid #e8a49b;">⚠️ 발행본과 다른 수정이 남아있음(재발행 필요)</span>`;
     if(hasAdminOv) return `<span class="tag" style="background:#e8f4ea;color:#1e7a3c;border:1px solid #a6d9b3;">🌐 전체 적용됨</span>`;
     return "";
   })() : "";
