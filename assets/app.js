@@ -10,7 +10,7 @@
        세 가지 다 파일을 건드릴 때마다 이 주석부터 확인할 것.
    [3] 엔진 수정 후에는 곧바로 배포본을 만들지 말고, 무엇을 고쳤는지 먼저 설명하고
        사용자 컨펌을 받은 뒤에만 배포본(들)을 새로 만든다. */
-const APP_VERSION = "2026.09.03_08.19";
+const APP_VERSION = "2026.09.03_08.30";
 
 /* ============ 강제 업데이트 임계값 ============
    평소엔 빈 문자열("")로 둔다 — 이 경우 새 버전이 나와도 사용자가 원할 때 눌러서
@@ -2086,7 +2086,12 @@ function sortByNo(list){
 }
 
 function renderYearPicker(){
-  const data = getData();
+  const allData = getData();
+  // 연도·회차별 화면은 "실제 시험 회차"를 고르는 화면이라, 연도 정보가 없는 문제
+  // (예: 챕터/교재 단위로만 정리된 이론 문제)는 대상에서 제외한다. 안 그러면
+  // "null년 1회"처럼 의미 없는 항목이 뜬다. 그런 문제들은 단원별/전체목록/빈도별
+  // 화면에서는 그대로 정상적으로 학습 가능하다.
+  const data = allData.filter(d=> d.year != null);
   const multiRound = datasetHasMultiRound(data);
   const multiPart = datasetHasMultiExamPart(data);
   const combos = {};
@@ -2102,7 +2107,7 @@ function renderYearPicker(){
     <div class="section-card">
       <h3>${multiRound ? "연도·회차를 선택하세요" : "연도를 선택하세요"}</h3>
       ${multiPart ? `<p style="font-size:0.78rem;color:var(--muted);margin-top:2px;">필답형과 작업형은 서로 섞이지 않도록 항목이 나뉘어 있어요.</p>` : ""}
-      <div class="chip-row chip-grid chip-grid-year">${comboList.map(c=>`<button class="chip" data-year="${c.year}" data-round="${c.round}" data-part="${escapeHtml(c.examPart||"")}">${labelOf(c)}${repeatBadgeHtml("year", labelOf(c))}</button>`).join("")}</div>
+      <div class="chip-row chip-grid chip-grid-year">${comboList.map(c=>`<button class="chip" data-year="${c.year}" data-round="${c.round}" data-part="${escapeHtml(c.examPart||"")}">${labelOf(c)}<span class="chip-count">${c.count}문항</span>${repeatBadgeHtml("year", labelOf(c))}</button>`).join("")}</div>
     </div>
   `;
   app.querySelectorAll("[data-year]").forEach(b=>{
