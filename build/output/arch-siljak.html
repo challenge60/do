@@ -1079,7 +1079,7 @@ const SAMPLE_DATA = [{"id":"2004-1-01","year":2004,"round":1,"no":1,"points":4,"
        세 가지 다 파일을 건드릴 때마다 이 주석부터 확인할 것.
    [3] 엔진 수정 후에는 곧바로 배포본을 만들지 말고, 무엇을 고쳤는지 먼저 설명하고
        사용자 컨펌을 받은 뒤에만 배포본(들)을 새로 만든다. */
-const APP_VERSION = "2026.09.02_11.59";
+const APP_VERSION = "2026.09.02_12.07";
 
 /* ============ PWA 설치(앱처럼 구동) ============ */
 try{
@@ -7273,10 +7273,15 @@ function openCropTool(src, onApply){
   const MIN_SIZE = 0.03; // 너무 작아지지 않도록 최소 크기(비율)
   let rect = {x:0.05, y:0.05, w:0.9, h:0.9};
   const drawRect = ()=>{
-    rectEl.style.left = (rect.x*100)+"%";
-    rectEl.style.top = (rect.y*100)+"%";
-    rectEl.style.width = (rect.w*100)+"%";
-    rectEl.style.height = (rect.h*100)+"%";
+    // CSS %는 부모(wrap)의 "보이는" 높이(max-height:60vh로 잘려 있음) 기준으로 계산되기 때문에,
+    // 화면보다 세로로 긴 이미지에서는 선택 박스가 그 잘린 지점 아래로는 아예 그려지지도 않는
+    // 문제가 있었다. 대신 이미지 자체의 실제 렌더링 픽셀 크기(imgEl.offsetWidth/Height)를
+    // 기준으로 px 단위로 직접 계산하면, 스크롤 가능한 전체 영역에 정확히 걸쳐서 그려진다.
+    const w = imgEl.offsetWidth, h = imgEl.offsetHeight;
+    rectEl.style.left = (rect.x*w)+"px";
+    rectEl.style.top = (rect.y*h)+"px";
+    rectEl.style.width = (rect.w*w)+"px";
+    rectEl.style.height = (rect.h*h)+"px";
   };
   imgEl.addEventListener("load", drawRect);
   drawRect();
