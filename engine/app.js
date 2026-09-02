@@ -2922,6 +2922,17 @@ function renderCard(){
   const modeSwitchable = ["unit","unitMinor","year","freq"].includes(state.mode);
   const modeTagLabel = isVoice ? "🔊 음성학습모드" : (isPractice ? "📖 연습모드" : "📝 시험모드");
   const modeTag = (isVoice || modeSwitchable) ? `<button type="button" class="tag mode mode-tag-btn" id="modeTagBtn">${modeTagLabel} ▾</button>` : "";
+  // 관리자 전용: 이 문항이 "전체 적용됨"(발행된 관리자 수정)인지, 아니면 "내 개인 수정만 있고
+  // 아직 전체 적용은 안 됨"인지 한눈에 구분하기 위한 배지. 개인 수정 상태를 확인 안 하고
+  // '전체 적용'을 눌렀다고 착각한 채 넘어가는 실수를 방지하기 위해 추가.
+  const editStatusTag = (typeof window !== "undefined" && window.isAdmin) ? (()=>{
+    const hasAdminOv = !!adminOverrideFor(q.id);
+    const hasLocalEdit = !!(store.edits && store.edits[q.id]);
+    if(hasLocalEdit && !hasAdminOv) return `<span class="tag" style="background:#fdecea;color:#c0392b;border:1px solid #e8a49b;">⚠️ 개인 수정만 있음(전체 미적용)</span>`;
+    if(hasAdminOv && hasLocalEdit) return `<span class="tag" style="background:#e8f4ea;color:#1e7a3c;border:1px solid #a6d9b3;">🌐 전체 적용됨 · 내 수정 있음</span>`;
+    if(hasAdminOv) return `<span class="tag" style="background:#e8f4ea;color:#1e7a3c;border:1px solid #a6d9b3;">🌐 전체 적용됨</span>`;
+    return "";
+  })() : "";
   setPageBar(titleLabel, {
     rightHtml: `<button class="pdf-mini" id="pdfBtn" title="현재 세트 PDF로 저장">🖨 PDF</button>`,
     rightId: "pdfBtn",
@@ -2939,6 +2950,7 @@ function renderCard(){
         ${combinedTag}
         ${starDupTag}
         ${accTag}
+        ${editStatusTag}
       </div>
     </div>
     <div class="card-box-wrap">
