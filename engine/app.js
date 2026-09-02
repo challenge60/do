@@ -526,14 +526,31 @@ function clearManualLinks(id){
 }
 
 /* ============ 자동(텍스트 유사) + 수동 연결을 합친 그룹핑 ============ */
+function isAutoDupExcluded(id){
+  return !!(store.edits && store.edits[id] && store.edits[id].excludeAutoDup);
+}
+/* 특정 문항을 그룹에서 완전히 해제한다 — 수동 연결도 끊고, 앞으로 자동(텍스트 유사도)
+   재감지 대상에서도 제외한다. (수동 링크만 지우면 자동감지가 다음 렌더링에서 다시
+   같은 그룹으로 묶어버려서, 자동 감지된 중복은 "해제"가 안 되는 것처럼 보이는 문제가 있었음) */
+function removeFromDupGroup(id){
+  clearManualLinks(id);
+  if(!store.edits) store.edits = {};
+  if(!store.edits[id]) store.edits[id] = {};
+  store.edits[id].excludeAutoDup = true;
+  saveStore();
+}
 function buildCombinedGroups(data){
   const parent = {};
   const find = x => (parent[x]===x) ? x : (parent[x]=find(parent[x]));
   const union = (a,b) => { const ra=find(a), rb=find(b); if(ra!==rb) parent[ra]=rb; };
   data.forEach(q=> parent[q.id]=q.id);
 
+  // "이 그룹에서 해제"된 문항은 자동(텍스트 유사도) 재감지 대상에서 빠진다.
+  // (수동으로 다시 연결하는 것은 아래에서 항상 허용됨 — 자동 감지만 제외)
+  const autoData = data.filter(q=> !isAutoDupExcluded(q.id));
+
   const byKey = {};
-  data.forEach(q=>{
+  autoData.forEach(q=>{
     const key = normText(q.question).slice(0,40);
     (byKey[key] ||= []).push(q.id);
   });
@@ -541,7 +558,7 @@ function buildCombinedGroups(data){
 
   // 완전히 똑같진 않지만(숫자·쉼표·오탈자 등 사소한 표기 차이) 사실상 같은 문제인 경우를 추가로 묶는다.
   // 정규화한 문제 텍스트를 정렬한 뒤 인접한 항목끼리만 비교하므로 1587문항 규모에서도 가볍게 동작한다.
-  const normed = data.map(q=>({id:q.id, norm:normText(q.question).slice(0,120)})).sort((a,b)=>
+  const normed = autoData.map(q=>({id:q.id, norm:normText(q.question).slice(0,120)})).sort((a,b)=>
     a.norm < b.norm ? -1 : a.norm > b.norm ? 1 : 0
   );
   const NEAR_DUP_THRESHOLD = 87;
@@ -556,6 +573,8 @@ function buildCombinedGroups(data){
     }
   }
 
+  // 수동 연결은 "자동 감지 제외" 여부와 무관하게 항상 반영한다 (해제된 문항이라도
+  // 특정 문항과 수동으로 다시 연결하고 싶을 수 있으므로).
   const idSet = new Set(data.map(q=>q.id));
   data.forEach(q=>{
     getManualLinks(q.id).forEach(otherId=>{ if(idSet.has(otherId)) union(q.id, otherId); });
@@ -1089,7 +1108,6 @@ function setupVoicePad(q){
   const clearBtn = document.getElementById("voicePadClearBtn");
   const recBtn = document.getElementById("voicePadRecBtn");
   const askBtn = document.getElementById("voicePadAskBtn");
-  const askFirstChk = document.getElementById("voicePadAskFirst");
   const statusEl = document.getElementById("voicePadStatus");
   if(!ta || !recBtn) return;
   if(!state.voiceMemos) state.voiceMemos = {};
@@ -1194,9 +1212,7 @@ function setupVoicePad(q){
         if(statusEl) statusEl.textContent = "이 브라우저는 음성 읽기를 지원하지 않아요.";
         return;
       }
-      speakOnce(q.question.replace(/\{\{img:\d+\}\}/g, "").replace(/\{\{BOX\}\}|\{\{\/BOX\}\}/g, ""), ()=>{
-        if(askFirstChk && askFirstChk.checked && statusEl) statusEl.textContent = "문제를 다 읽었어요. 이제 답변을 녹음해보세요.";
-      });
+      speakOnce(q.question.replace(/\{\{img:\d+\}\}/g, "").replace(/\{\{BOX\}\}|\{\{\/BOX\}\}/g, ""));
     });
   }
 }
@@ -2990,7 +3006,6 @@ function renderCard(){
                 <button type="button" class="pen-pad-clear" id="voicePadClearBtn">지우기</button>
               </div>
             </div>
-            <label class="voice-pad-toggle"><input type="checkbox" id="voicePadAskFirst"> 문제를 먼저 읽어주고 답변만 받아쓰기</label>
             <div class="voice-pad-controls">
               <button type="button" class="btn ghost" id="voicePadAskBtn">🔊 문제 듣기</button>
               <button type="button" class="btn" id="voicePadRecBtn">🎙️ 녹음 시작</button>
@@ -3069,8 +3084,11 @@ function renderCard(){
   attachCardGestures("cardBox",
     (e)=>{
       const t = e.target;
-      if(t.closest && t.closest("button,textarea,input,.mini-btn,#answerSlot,.pen-pad")) return;
+      // 정답 영역(#answerSlot) 안이라도 이미지는 확대되어야 한다.
+      // (아래에서 #answerSlot 자체는 '정답 다시 가리기' 같은 다른 동작과 안 겹치게 탭을 무시하지만,
+      //  이미지 확대만큼은 정답 안이든 밖이든 항상 동작해야 하므로 그 검사보다 먼저 처리한다)
       if(t.tagName === "IMG"){ openImageZoom(t.src); return; }
+      if(t.closest && t.closest("button,textarea,input,.mini-btn,#answerSlot,.pen-pad")) return;
       toggleAnswerVisibility(q);
     },
     ()=>{ if(state.idx < state.queue.length-1) goToCard(state.idx+1); else { maybeCountPassiveView(); recordQueueCompletion(); saveQueueSession(); snapBack(document.getElementById("cardBox")); alert("이번 세트 학습을 완료했습니다!"); setView(state.returnView || (state.mode==="unitMinor" ? "unit" : (["unit","year","freq"].includes(state.mode) ? state.mode : "home"))); } },
@@ -4497,7 +4515,10 @@ function openDuplicateModal(id){
     const label = yearRoundLabel(c, multiRound) + (c.no?`-${c.no}`:"");
     return `
       <div class="tagmodal-item">
-        <div class="tagmodal-meta">${label} · ${c.year}년${c.round?" "+c.round+"회":""} · ${c.unitMajor}${c.unitMinor ? " · "+c.unitMinor : ""}${c.points?` · ${c.points}점`:""}${c.id===id?" · (현재 문제)":""}</div>
+        <div class="tagmodal-meta" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <span>${label} · ${c.year}년${c.round?" "+c.round+"회":""} · ${c.unitMajor}${c.unitMinor ? " · "+c.unitMinor : ""}${c.points?` · ${c.points}점`:""}${c.id===id?" · (현재 문제)":""}</span>
+          ${list.length>1 ? `<button type="button" class="pdf-mini" data-dupunlink="${c.id}" style="flex-shrink:0;">이 그룹에서 해제</button>` : ""}
+        </div>
         ${renderTextWithImages(c.question, c.images, c.answer)}
         <div class="answer-reveal qa-box" style="margin-top:32px;"><span class="qa-label answer">정답</span>${inlineImagesOnly(c.answer, c.images)}</div>
       </div>`;
@@ -4510,11 +4531,22 @@ function openDuplicateModal(id){
       <div class="card-head" style="padding-right:24px;">
         <h3>★ 중복 출제 이력 · ${list.length}건</h3>
       </div>
+      ${list.length>1 ? `<p style="font-size:0.78rem;color:var(--muted);padding:0 4px;">중복 연결이 잘못됐다면 해당 문항의 "이 그룹에서 해제"를 눌러주세요. 그 문항만 이 그룹에서 빠지고, 나머지는 그대로 서로 연결된 채 남아요.</p>` : ""}
       <div class="tagmodal-list">${itemsHtml || '<div class="empty-note">중복 출제 이력이 없습니다.</div>'}</div>
     </div>
   `;
   document.body.appendChild(overlay);
   overlay.querySelector(".close-x").addEventListener("click", ()=> overlay.remove());
+  overlay.querySelectorAll("[data-dupunlink]").forEach(btn=>{
+    btn.addEventListener("click", (e)=>{
+      e.stopPropagation();
+      const targetId = btn.dataset.dupunlink;
+      if(!confirm("이 문항을 중복 그룹에서 해제할까요? (이 문항만 빠지고, 나머지 문항들끼리는 계속 연결된 채로 남아요. 앞으로 자동 재감지 대상에서도 제외돼요)")) return;
+      removeFromDupGroup(targetId);
+      overlay.remove();
+      openDuplicateModal(id===targetId ? (list.find(x=>x.id!==targetId)||{}).id : id);
+    });
+  });
   let mouseDownOnDupModal = false;
   overlay.addEventListener("mousedown", e=>{ mouseDownOnDupModal = (e.target===overlay); });
   overlay.addEventListener("click", (e)=>{ if(e.target===overlay && mouseDownOnDupModal) overlay.remove(); });
@@ -5383,7 +5415,10 @@ function attachCardGestures(elId, onTap, onSwipeLeft, onSwipeRight){
   });
 
   el.addEventListener("mousedown", e=>{
-    if(e.target.closest("button,textarea,input,select,.mini-btn,.edit-image-del,#answerSlot,.pen-pad")) return;
+    // 정답 영역(#answerSlot) 안의 이미지는 확대를 위해 제스처 추적을 계속 진행시킨다.
+    // (그 외 #answerSlot 안의 다른 요소는 기존처럼 카드 스와이프/탭 대상에서 제외)
+    const isAnswerImage = e.target.tagName === "IMG" && e.target.closest("#answerSlot");
+    if(!isAnswerImage && e.target.closest("button,textarea,input,select,.mini-btn,.edit-image-del,#answerSlot,.pen-pad")) return;
     mouseDown = true;
     begin(e.clientX, e.clientY);
   });
@@ -5801,8 +5836,8 @@ function onLinkModeCardTap(id){
 }
 /* ---- 연결 모드: "연결됨" 배지를 탭했을 때만 그룹 해제 ---- */
 function onLinkModeUnlinkTap(id){
-  if(!confirm("이 문항을 연결된 그룹에서 해제할까요?")) return;
-  clearManualLinks(id);
+  if(!confirm("이 문항을 연결된 그룹에서 해제할까요? (앞으로 자동 재감지 대상에서도 제외돼요)")) return;
+  removeFromDupGroup(id);
   linkSelected.delete(id);
   renderBrowseList();
 }
