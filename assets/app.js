@@ -10,7 +10,7 @@
        세 가지 다 파일을 건드릴 때마다 이 주석부터 확인할 것.
    [3] 엔진 수정 후에는 곧바로 배포본을 만들지 말고, 무엇을 고쳤는지 먼저 설명하고
        사용자 컨펌을 받은 뒤에만 배포본(들)을 새로 만든다. */
-const APP_VERSION = "2026.09.02_18.07";
+const APP_VERSION = "2026.09.02_18.19";
 
 /* ============ PWA 설치(앱처럼 구동) ============ */
 try{
@@ -380,7 +380,15 @@ async function maybeAskAdminPublish(id, payload){
   if(!ok) return;
   try{
     await window.publishAdminOverride(id, payload);
+    // 발행에 성공했으면 "내 개인 수정" 기록은 이제 방금 발행한 내용과 똑같은 중복 사본일 뿐이라
+    // 지워준다. 안 지우면 나중에 이 문제를 볼 때마다 계속 'My' 배지가 남아있는 것처럼
+    // 보여서(실제로는 전체 적용본과 같은 내용인데도) 관리자가 헷갈리는 문제가 있었음.
+    if(store.edits && store.edits[id]){
+      delete store.edits[id];
+      saveStore();
+    }
     toast("전체 사용자 기본값으로 적용되었습니다");
+    if(state.view === "card") renderCard(); // 새로고침 없이 바로 배지가 갱신되도록
   }catch(e){
     console.error(e);
     alert("전체 적용 중 오류가 발생했습니다: " + (e && e.message ? e.message : e));
@@ -2933,7 +2941,7 @@ function renderCard(){
     if(!hasLocalEdit && !hasAdminOv) return "";
     const allBadge = hasAdminOv ? `<span class="edit-status-badge all" title="관리자 편집 후 전체 적용된 문제예요">All</span>` : "";
     const myBadge = hasLocalEdit ? `<span class="edit-status-badge my" title="내가 수정한 내용이에요">My</span>` : "";
-    return `<div class="card-edit-status-badges">${allBadge}${myBadge}</div>`;
+    return `${allBadge}${myBadge}`;
   })();
   setPageBar(titleLabel, {
     rightHtml: `<button class="pdf-mini" id="pdfBtn" title="현재 세트 PDF로 저장">🖨 PDF</button>`,
@@ -2955,7 +2963,6 @@ function renderCard(){
       </div>
     </div>
     <div class="card-box-wrap">
-      ${editStatusBadges}
       <div class="card-corner-actions">
         <button class="corner-emoji-btn" id="voiceModeBtn" title="음성모드 전환">🔊</button>
         <button class="corner-emoji-btn" id="starBtn" title="즐겨찾기">☆</button>
@@ -2965,7 +2972,7 @@ function renderCard(){
         <button class="corner-emoji-btn" id="editBtn" title="수정">✏️</button>
       </div>
       <div class="card-box" id="cardBox">
-        ${renderTextWithImages(q.question, q.images, q.answer)}
+        ${renderTextWithImages(q.question, q.images, q.answer, editStatusBadges)}
         <div id="answerSlot"></div>
         <div id="gradeSlot"></div>
         <div class="pen-pad practice-pad">
@@ -5589,10 +5596,11 @@ function inlineImagesOnly(text, images){
     return src ? `<img src="${src}" alt="이미지 ${idx+1}" class="q-image inline-img">` : "";
   }));
 }
-function renderTextWithImages(text, images, otherText){
+function renderTextWithImages(text, images, otherText, extraLabelHtml){
   const safe = escapeHtml(text || "");
+  const labelHtml = `<span class="qa-label">문제</span>${extraLabelHtml || ""}`;
   if(!images || !images.length){
-    return `<div class="q-text"><span class="qa-label">문제</span>${renderBoxMarkers(safe)}</div>`;
+    return `<div class="q-text">${labelHtml}${renderBoxMarkers(safe)}</div>`;
   }
   const used = new Set();
   // 다른 필드(예: 정답)에 이미 위치가 지정된 이미지는 여기서 다시(중복으로) 보여주지 않는다
@@ -5611,7 +5619,7 @@ function renderTextWithImages(text, images, otherText){
   // 문제/정답 어디에도 위치가 지정되지 않은 이미지는 기본적으로 문제 쪽에 표시한다 (박스 안쪽에 포함)
   const remainIdx = images.map((_,idx)=>idx).filter(idx=>!used.has(idx));
   const tail = remainIdx.length ? renderImages(remainIdx.map(idx=>images[idx])) : "";
-  return `<div class="q-text"><span class="qa-label">문제</span>${renderBoxMarkers(withInline)}${tail}</div>`;
+  return `<div class="q-text">${labelHtml}${renderBoxMarkers(withInline)}${tail}</div>`;
 }
 
 /* 배포용으로 Base64 인코딩된 데이터 파일을 자동으로 풀어준다 */
