@@ -5434,12 +5434,119 @@ function attachCardGestures(elId, onTap, onSwipeLeft, onSwipeRight){
 }
 
 /* ---- 이미지 확대 보기 (라이트박스) ---- */
+/* ---- 이미지 확대 보기 (라이트박스) — 핀치줌·더블탭줌·휠줌·드래그 이동 지원 ----
+   표(테이블)처럼 글씨가 작은 이미지는 화면 크기에 맞춘 정도로는 안 보여서,
+   그 안에서 추가로 더 확대해볼 수 있어야 한다는 요청으로 추가함. */
 function openImageZoom(src){
   const overlay = document.createElement("div");
   overlay.className = "zoom-overlay";
-  overlay.innerHTML = `<img src="${src}" class="zoom-img">`;
-  overlay.addEventListener("click", ()=> overlay.remove());
+  overlay.innerHTML = `
+    <button type="button" class="zoom-close-btn" aria-label="닫기">✕</button>
+    <img src="${src}" class="zoom-img" draggable="false">`;
   document.body.appendChild(overlay);
+  const img = overlay.querySelector(".zoom-img");
+  const closeBtn = overlay.querySelector(".zoom-close-btn");
+
+  const MIN_SCALE = 1, MAX_SCALE = 5;
+  let scale = 1, tx = 0, ty = 0;
+  const apply = ()=>{ img.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`; };
+  const clampPan = ()=>{
+    // 확대된 이미지가 화면 밖으로 과하게 밀려나가지 않도록 대략적으로 제한
+    const rect = img.getBoundingClientRect();
+    const maxX = Math.max(0, (rect.width*scale - rect.width)/2 + rect.width*0.15);
+    const maxY = Math.max(0, (rect.height*scale - rect.height)/2 + rect.height*0.15);
+    tx = Math.min(Math.max(tx, -maxX), maxX);
+    ty = Math.min(Math.max(ty, -maxY), maxY);
+  };
+  const setScale = (newScale, cx, cy)=>{
+    newScale = Math.min(Math.max(newScale, MIN_SCALE), MAX_SCALE);
+    if(newScale === scale) return;
+    scale = newScale;
+    if(scale === MIN_SCALE){ tx = 0; ty = 0; }
+    clampPan();
+    apply();
+  };
+  const close = ()=> overlay.remove();
+  closeBtn.addEventListener("click", close);
+
+  // ---- 더블클릭(데스크톱): 클릭 지점 기준으로 확대/원복 토글 ----
+  img.addEventListener("dblclick", (e)=>{
+    e.stopPropagation();
+    setScale(scale > MIN_SCALE ? MIN_SCALE : 2.5);
+  });
+
+  // ---- 마우스 휠(데스크톱): 확대/축소 ----
+  overlay.addEventListener("wheel", (e)=>{
+    e.preventDefault();
+    setScale(scale + (e.deltaY < 0 ? 0.35 : -0.35));
+  }, {passive:false});
+
+  // ---- 배경(이미지 바깥) 클릭 시에만 닫힘. 이미지 위 클릭은 더블클릭(확대)과 헷갈리지 않도록
+  //      아예 닫기 동작과 무관하게 둔다(더블클릭의 첫 클릭에서 먼저 닫혀버리는 문제 방지). ----
+  overlay.addEventListener("click", (e)=>{
+    if(e.target === overlay) close();
+  });
+
+  // ---- 마우스 드래그로 이동(확대 중일 때만) ----
+  let dragging = false, dragStartX=0, dragStartY=0, dragStartTx=0, dragStartTy=0, draggedThisGesture=false;
+  img.addEventListener("mousedown", (e)=>{
+    if(scale <= MIN_SCALE) return;
+    dragging = true; draggedThisGesture = false;
+    dragStartX = e.clientX; dragStartY = e.clientY; dragStartTx = tx; dragStartTy = ty;
+    e.preventDefault();
+  });
+  window.addEventListener("mousemove", (e)=>{
+    if(!dragging) return;
+    const dx = e.clientX - dragStartX, dy = e.clientY - dragStartY;
+    if(Math.abs(dx) > 3 || Math.abs(dy) > 3) draggedThisGesture = true;
+    tx = dragStartTx + dx; ty = dragStartTy + dy;
+    clampPan();
+    apply();
+  });
+  window.addEventListener("mouseup", ()=>{ dragging = false; });
+
+  // ---- 터치: 한 손가락 드래그(확대 중 이동) + 두 손가락 핀치줌 + 더블탭줌 ----
+  let touchMode = null; // "pan" | "pinch"
+  let pinchStartDist = 0, pinchStartScale = 1;
+  let panStartX=0, panStartY=0, panStartTx=0, panStartTy=0;
+  let lastTapTime = 0;
+  const touchDist = (t1, t2)=> Math.hypot(t1.clientX-t2.clientX, t1.clientY-t2.clientY);
+
+  img.addEventListener("touchstart", (e)=>{
+    if(e.touches.length === 2){
+      touchMode = "pinch";
+      pinchStartDist = touchDist(e.touches[0], e.touches[1]);
+      pinchStartScale = scale;
+    } else if(e.touches.length === 1){
+      const now = Date.now();
+      if(now - lastTapTime < 300){
+        // 더블탭: 탭 지점 기준으로 확대/원복 토글
+        setScale(scale > MIN_SCALE ? MIN_SCALE : 2.5);
+        touchMode = null;
+      } else if(scale > MIN_SCALE){
+        touchMode = "pan";
+        panStartX = e.touches[0].clientX; panStartY = e.touches[0].clientY;
+        panStartTx = tx; panStartTy = ty;
+      } else {
+        touchMode = null; // 확대 안 된 상태의 한 손가락 탭은 닫기 클릭으로 처리(overlay click)
+      }
+      lastTapTime = now;
+    }
+  }, {passive:true});
+  img.addEventListener("touchmove", (e)=>{
+    if(touchMode === "pinch" && e.touches.length === 2){
+      const dist = touchDist(e.touches[0], e.touches[1]);
+      setScale(pinchStartScale * (dist / pinchStartDist));
+      if(e.cancelable) e.preventDefault();
+    } else if(touchMode === "pan" && e.touches.length === 1){
+      tx = panStartTx + (e.touches[0].clientX - panStartX);
+      ty = panStartTy + (e.touches[0].clientY - panStartY);
+      clampPan();
+      apply();
+      if(e.cancelable) e.preventDefault();
+    }
+  }, {passive:false});
+  img.addEventListener("touchend", ()=>{ touchMode = null; });
 }
 
 /* ---- 카드 등장 애니메이션 (책장 넘기기 느낌) ---- */
