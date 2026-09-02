@@ -10,7 +10,7 @@
        세 가지 다 파일을 건드릴 때마다 이 주석부터 확인할 것.
    [3] 엔진 수정 후에는 곧바로 배포본을 만들지 말고, 무엇을 고쳤는지 먼저 설명하고
        사용자 컨펌을 받은 뒤에만 배포본(들)을 새로 만든다. */
-const APP_VERSION = "2026.09.02_18.25";
+const APP_VERSION = "2026.09.02_23.18";
 
 /* ============ PWA 설치(앱처럼 구동) ============ */
 try{
@@ -6055,6 +6055,7 @@ function openEditModal(id, onSaved){
         <div class="btn-row" style="margin-top:6px;gap:8px;">
           <button type="button" class="btn ghost box-wrap-btn" data-target="editQuestion" style="min-height:36px;font-size:0.82rem;">🔲 선택 영역 박스로 감싸기</button>
           <button type="button" class="btn ghost box-unwrap-btn" data-target="editQuestion" style="min-height:36px;font-size:0.82rem;color:var(--brick);border-color:var(--brick);">박스 해제</button>
+          <button type="button" class="btn ghost symbol-panel-btn" data-target="editQuestion" style="min-height:36px;font-size:0.82rem;">Ω 기호 삽입</button>
         </div>
       </div>
       <div class="edit-field">
@@ -6063,8 +6064,10 @@ function openEditModal(id, onSaved){
         <div class="btn-row" style="margin-top:6px;gap:8px;">
           <button type="button" class="btn ghost box-wrap-btn" data-target="editAnswer" style="min-height:36px;font-size:0.82rem;">🔲 선택 영역 박스로 감싸기</button>
           <button type="button" class="btn ghost box-unwrap-btn" data-target="editAnswer" style="min-height:36px;font-size:0.82rem;color:var(--brick);border-color:var(--brick);">박스 해제</button>
+          <button type="button" class="btn ghost symbol-panel-btn" data-target="editAnswer" style="min-height:36px;font-size:0.82rem;">Ω 기호 삽입</button>
         </div>
       </div>
+      <div class="edit-field" id="symbolPanelHost"></div>
       <div class="edit-field">
         <label>키워드 <small style="font-weight:400;color:var(--muted);">(쉼표 , 로 구분해서 입력)</small></label>
         <input type="text" class="search-box" id="editTags" placeholder="예: 시멘트, 혼화재료" value="${escapeHtml((original.tags||[]).join(', '))}">
@@ -6274,6 +6277,61 @@ function openEditModal(id, onSaved){
         if(!confirm(`선택된 부분이 없습니다. ${fieldLabel}의 모든 박스 표시를 제거할까요?`)) return;
         ta.value = val.replace(/\{\{BOX\}\}/g, "").replace(/\{\{\/BOX\}\}/g, "");
       }
+    });
+  });
+
+  // ---- 기호 삽입 팔레트: 자격증 시험에 자주 나오는 로마자·원문자·그리스문자·수학기호 등을
+  // 커서 위치에 바로 넣는다. LaTeX 같은 수식 편집기까지는 과해서, 실용적인 선에서 유니코드
+  // 문자만으로 처리 — 렌더링 쪽 변경이 전혀 필요 없다는 것도 장점(그냥 평범한 텍스트라서). ----
+  const SYMBOL_CATEGORIES = [
+    { label: "로마자", chars: "Ⅰ Ⅱ Ⅲ Ⅳ Ⅴ Ⅵ Ⅶ Ⅷ Ⅸ Ⅹ Ⅺ Ⅻ".split(" ") },
+    { label: "원문자(숫자)", chars: "① ② ③ ④ ⑤ ⑥ ⑦ ⑧ ⑨ ⑩ ⑪ ⑫ ⑬ ⑭ ⑮".split(" ") },
+    { label: "원문자(가나다)", chars: "㉮ ㉯ ㉰ ㉱ ㉲ ㉳ ㉴ ㉵ ㉶ ㉷".split(" ") },
+    { label: "원문자(영문)", chars: "Ⓐ Ⓑ Ⓒ Ⓓ Ⓔ Ⓕ ⓐ ⓑ ⓒ ⓓ ⓔ ⓕ".split(" ") },
+    { label: "그리스 대문자", chars: "Α Β Γ Δ Ε Ζ Η Θ Λ Π Σ Φ Ψ Ω".split(" ") },
+    { label: "그리스 소문자", chars: "α β γ δ ε θ λ μ π ρ σ τ φ ω".split(" ") },
+    { label: "수학 연산", chars: "√ ± × ÷ ≠ ≤ ≥ ≈ ∞ ∑ ∏ ∫ ∂ ∴ ∵".split(" ") },
+    { label: "위첨자(지수)", chars: "⁰ ¹ ² ³ ⁴ ⁵ ⁶ ⁷ ⁸ ⁹ ⁺ ⁻ ⁿ".split(" ") },
+    { label: "아래첨자", chars: "₀ ₁ ₂ ₃ ₄ ₅ ₆ ₇ ₈ ₉ ₊ ₋".split(" ") },
+    { label: "분수", chars: "½ ⅓ ⅔ ¼ ¾ ⅕ ⅙ ⅛".split(" ") },
+    { label: "단위·온도", chars: "° ′ ″ ℃ ㎡ ㎥ ㎜ ㎝ ㎞ ㎏ ㏊".split(" ") },
+    { label: "화살표", chars: "→ ← ↑ ↓ ⇒ ⇐ ↔".split(" ") },
+    { label: "기타", chars: "§ ¶ • ‰ ※ ∈ ∉ ⊂ ⊃ ∪ ∩ ∀ ∃".split(" ") },
+  ];
+  let symbolPanelTarget = null;
+  let symbolPanelOpen = false;
+  const renderSymbolPanel = ()=>{
+    const host = overlay.querySelector("#symbolPanelHost");
+    if(!symbolPanelOpen){ host.innerHTML = ""; return; }
+    host.innerHTML = `
+      <div class="symbol-panel">
+        <div class="symbol-panel-head">
+          <b>기호 삽입</b> <small style="color:var(--muted);">누르면 "${symbolPanelTarget==="editAnswer"?"정답":"문제"}" 커서 위치에 들어가요</small>
+          <span class="symbol-panel-close" id="symbolPanelCloseBtn">✕</span>
+        </div>
+        ${SYMBOL_CATEGORIES.map(cat=>`
+          <div class="symbol-cat">
+            <div class="symbol-cat-label">${cat.label}</div>
+            <div class="symbol-cat-chars">
+              ${cat.chars.map(ch=>`<button type="button" class="symbol-btn" data-ch="${ch}">${ch}</button>`).join("")}
+            </div>
+          </div>`).join("")}
+      </div>`;
+    host.querySelector("#symbolPanelCloseBtn").addEventListener("click", ()=>{ symbolPanelOpen = false; renderSymbolPanel(); });
+    host.querySelectorAll(".symbol-btn").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        const ta = overlay.querySelector("#"+symbolPanelTarget);
+        insertAtCursor(ta, btn.dataset.ch);
+      });
+    });
+  };
+  overlay.querySelectorAll(".symbol-panel-btn").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const target = btn.dataset.target;
+      if(symbolPanelOpen && symbolPanelTarget === target){ symbolPanelOpen = false; }
+      else { symbolPanelOpen = true; symbolPanelTarget = target; }
+      renderSymbolPanel();
+      if(symbolPanelOpen) overlay.querySelector("#symbolPanelHost").scrollIntoView({behavior:"smooth", block:"nearest"});
     });
   });
 
