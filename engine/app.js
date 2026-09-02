@@ -6655,12 +6655,25 @@ document.addEventListener("keydown", (e)=>{
 })();
 
 /* ---- 새 버전 자동 감지: GitHub Pages/브라우저 캐시 때문에 배포 직후에도 옛날 화면이
-   계속 보이는 문제를 줄이기 위해, 주기적으로 캐시를 건너뛰고 같은 주소를 다시 받아와
-   APP_VERSION을 비교한다. 다르면 화면 하단에 배너를 띄우고, 누르면 캐시 무시하고 새로고침한다. ---- */
+   계속 보이는 문제를 줄이기 위해, 주기적으로 캐시를 건너뛰고 실제 버전이 들어있는
+   assets/app.js 파일을 다시 받아와 APP_VERSION을 비교한다. 다르면 화면 하단에 배너를
+   띄우고, 누르면 캐시 무시하고 새로고침한다.
+   ⚠️ 예전 버전은 location.pathname(=이 HTML 페이지 자체)을 다시 받아와서 그 안에서
+   APP_VERSION을 찾았는데, APP_VERSION은 HTML이 아니라 <script src="assets/app.js">로
+   불러오는 외부 파일 안에만 있어서 정규식이 절대 매칭되지 않는 버그가 있었다(그래서
+   이 배너가 사실상 한 번도 뜬 적이 없었음). 실제로 <script> 태그가 가리키는 app.js
+   경로를 그대로 읽어서 그 파일 내용을 검사하도록 수정했다. ---- */
 (function(){
+  function appJsSrc(){
+    const tag = document.querySelector('script[src*="assets/app.js"]');
+    if(!tag) return null;
+    return tag.getAttribute("src").split("?")[0]; // 기존 ?v=해시는 떼고, 아래서 캐시무효화용 쿼리를 새로 붙인다
+  }
   async function checkForNewVersion(){
     try{
-      const res = await fetch(location.pathname + location.search, { cache: "no-store" });
+      const src = appJsSrc();
+      if(!src) return;
+      const res = await fetch(src + "?_check=" + Date.now(), { cache: "no-store" });
       if(!res.ok) return;
       const text = await res.text();
       const m = text.match(/const APP_VERSION = "([^"]*)"/);
@@ -6684,5 +6697,10 @@ document.addEventListener("keydown", (e)=>{
     });
     document.body.appendChild(bar);
   }
-  setTimeout(checkForNewVersion, 4000); // 앱 켤 때 한 번만 확인
+  setTimeout(checkForNewVersion, 4000); // 앱 켤 때 1차 확인
+  setInterval(checkForNewVersion, 5 * 60 * 1000); // 켜둔 채로 오래 쓰는 경우를 위해 5분마다 재확인
+  document.addEventListener("visibilitychange", ()=>{
+    // 백그라운드에 있던 앱(특히 홈 화면에 추가한 PWA)을 다시 열었을 때 즉시 재확인
+    if(document.visibilityState === "visible") checkForNewVersion();
+  });
 })();
