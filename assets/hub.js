@@ -449,6 +449,17 @@ function renderLogin(statusMsg, statusType, mode) {
     btn.disabled = true;
     status.className = "login-status";
 
+    // 형식 자체가 엉터리인 이메일(예: '@' 뒤에 점(.)이 없는 'leejabbu@gmail' 같은 경우)을
+    // 여기서 미리 걸러낸다. Supabase 서버 쪽 검증만 믿었다가, 실제로 '.com'이 빠진 주소로도
+    // 가입이 되어버려서 나중에 로그인을 못 하는 사고가 있었음 — 그 재발 방지용.
+    const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+    if (!EMAIL_RE.test(email)) {
+      status.textContent = "이메일 형식이 올바르지 않아요. (예: name@example.com) '.com' 같은 부분이 빠지지 않았는지 확인해주세요.";
+      status.className = "login-status err";
+      btn.disabled = false;
+      return;
+    }
+
     if (isSignup) {
       const passwordConfirm = document.getElementById("passwordConfirmInput").value;
       const nickname = document.getElementById("nicknameInput").value.trim();
