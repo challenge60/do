@@ -10,7 +10,7 @@
        세 가지 다 파일을 건드릴 때마다 이 주석부터 확인할 것.
    [3] 엔진 수정 후에는 곧바로 배포본을 만들지 말고, 무엇을 고쳤는지 먼저 설명하고
        사용자 컨펌을 받은 뒤에만 배포본(들)을 새로 만든다. */
-const APP_VERSION = "2026.09.03_08.30";
+const APP_VERSION = "2026.09.03_08.49";
 
 /* ============ 강제 업데이트 임계값 ============
    평소엔 빈 문자열("")로 둔다 — 이 경우 새 버전이 나와도 사용자가 원할 때 눌러서
@@ -2087,15 +2087,15 @@ function sortByNo(list){
 
 function renderYearPicker(){
   const allData = getData();
-  // 연도·회차별 화면은 "실제 시험 회차"를 고르는 화면이라, 연도 정보가 없는 문제
-  // (예: 챕터/교재 단위로만 정리된 이론 문제)는 대상에서 제외한다. 안 그러면
-  // "null년 1회"처럼 의미 없는 항목이 뜬다. 그런 문제들은 단원별/전체목록/빈도별
-  // 화면에서는 그대로 정상적으로 학습 가능하다.
-  const data = allData.filter(d=> d.year != null);
-  const multiRound = datasetHasMultiRound(data);
-  const multiPart = datasetHasMultiExamPart(data);
+  // 연도·회차별 화면은 기본적으로 "실제 시험 회차"를 고르는 화면이지만, 연도 정보가
+  // 없는 문제(챕터/교재 단위로만 정리된 이론 문제 등)도 여기서 아예 안 보이면 놓치기
+  // 쉬우므로, 맨 마지막에 "회차 미분류" 칩 하나로 모아서 같이 보여준다.
+  const dated = allData.filter(d=> d.year != null);
+  const undated = allData.filter(d=> d.year == null);
+  const multiRound = datasetHasMultiRound(dated);
+  const multiPart = datasetHasMultiExamPart(dated);
   const combos = {};
-  data.forEach(d=>{
+  dated.forEach(d=>{
     const key = d.year + "-" + (d.round||1) + (multiPart ? "-"+d.examPart : "");
     if(!combos[key]) combos[key] = {year:d.year, round:d.round||1, examPart:d.examPart, count:0};
     combos[key].count++;
@@ -2103,18 +2103,24 @@ function renderYearPicker(){
   const comboList = Object.values(combos).sort((a,b)=> b.year-a.year || b.round-a.round || String(a.examPart||"").localeCompare(String(b.examPart||"")));
   const labelOf = (c)=> `${c.year}년${multiRound?" "+c.round+"회":""}${multiPart?" · "+c.examPart:""}`;
   setPageBar(multiRound ? "연도·회차별" : "연도별");
+  const undatedChip = undated.length ? `<button class="chip chip-undated" data-year="null" data-round="" data-part="">회차 미분류<span class="chip-count">${undated.length}문항</span>${repeatBadgeHtml("year", "회차 미분류")}</button>` : "";
   app.innerHTML = `
     <div class="section-card">
       <h3>${multiRound ? "연도·회차를 선택하세요" : "연도를 선택하세요"}</h3>
       ${multiPart ? `<p style="font-size:0.78rem;color:var(--muted);margin-top:2px;">필답형과 작업형은 서로 섞이지 않도록 항목이 나뉘어 있어요.</p>` : ""}
-      <div class="chip-row chip-grid chip-grid-year">${comboList.map(c=>`<button class="chip" data-year="${c.year}" data-round="${c.round}" data-part="${escapeHtml(c.examPart||"")}">${labelOf(c)}<span class="chip-count">${c.count}문항</span>${repeatBadgeHtml("year", labelOf(c))}</button>`).join("")}</div>
+      ${undated.length ? `<p style="font-size:0.78rem;color:var(--muted);margin-top:2px;">특정 회차가 확인되지 않은 문제는 맨 아래 "회차 미분류"로 따로 모아뒀어요.</p>` : ""}
+      <div class="chip-row chip-grid chip-grid-year">${comboList.map(c=>`<button class="chip" data-year="${c.year}" data-round="${c.round}" data-part="${escapeHtml(c.examPart||"")}">${labelOf(c)}<span class="chip-count">${c.count}문항</span>${repeatBadgeHtml("year", labelOf(c))}</button>`).join("")}${undatedChip}</div>
     </div>
   `;
   app.querySelectorAll("[data-year]").forEach(b=>{
     b.addEventListener("click", ()=>{
+      if(b.dataset.year === "null"){
+        openModeModal(sortByNo(undated), "year", "회차 미분류", "year");
+        return;
+      }
       const y = Number(b.dataset.year), r = Number(b.dataset.round), p = b.dataset.part || null;
       const lbl = labelOf({year:y, round:r, examPart:p});
-      openModeModal(sortByNo(data.filter(q=> q.year===y && (q.round||1)===r && (!multiPart || q.examPart===p))), "year", lbl, "year");
+      openModeModal(sortByNo(dated.filter(q=> q.year===y && (q.round||1)===r && (!multiPart || q.examPart===p))), "year", lbl, "year");
     });
   });
 }
