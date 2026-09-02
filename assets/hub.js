@@ -423,11 +423,19 @@ function renderLogin(statusMsg, statusType, mode) {
           </div>` : ""}
           <button type="submit" class="login-btn" id="authBtn">${isSignup ? "가입하기" : "로그인"}</button>
         </form>
+        ${!isSignup ? `<p style="text-align:center;margin-top:10px;"><a href="#" id="forgotPwLink" style="font-size:0.8rem;color:var(--muted);text-decoration:underline;">비밀번호를 잊으셨나요?</a></p>` : ""}
         <p class="login-status ${statusType || ""}" id="loginStatus">${statusMsg || ""}</p>
       </div>
     </div>`;
 
   bindHubInstallBtn();
+  const forgotLink = document.getElementById("forgotPwLink");
+  if (forgotLink) {
+    forgotLink.addEventListener("click", (e) => {
+      e.preventDefault();
+      openForgotPasswordModal();
+    });
+  }
   document.querySelectorAll(".login-mode-tab").forEach((tabBtn) => {
     tabBtn.addEventListener("click", () => renderLogin(null, null, tabBtn.dataset.mode));
   });
@@ -557,6 +565,96 @@ function goToNextIfAny() {
 // 스캐너는 페이지를 열어만 볼 뿐 버튼을 누르지 않으므로 토큰이 보존된다.
 // ※ 이 기능이 동작하려면 Supabase 대시보드의 매직 링크 이메일 템플릿도 함께 바꿔야 한다.
 //   (docs/PROJECT_GUIDE.md 참고)
+// 비밀번호를 잊었을 때: 본인 이메일로 재설정 링크를 받는 모달.
+// 관리자를 포함해 그 누구도 실제 비밀번호 값을 보거나 정하지 않고, 본인만 새 비밀번호를 입력한다.
+function openForgotPasswordModal() {
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="modal-card">
+      <h2 class="modal-title">비밀번호 재설정</h2>
+      <p class="modal-desc">가입하신 이메일 주소를 입력하시면, 새 비밀번호를 설정할 수 있는 링크를 보내드려요.</p>
+      <input type="email" class="login-input" id="forgotEmailInput" placeholder="you@example.com" autocomplete="email" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <p class="login-status err" id="forgotStatus" style="min-height:auto;"></p>
+      <div class="modal-actions">
+        <button type="button" class="logout-btn" id="forgotCancelBtn">취소</button>
+        <button type="button" class="login-btn" id="forgotSendBtn" style="width:auto;padding:10px 18px;">재설정 링크 보내기</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+  document.getElementById("forgotCancelBtn").addEventListener("click", close);
+  document.getElementById("forgotSendBtn").addEventListener("click", async () => {
+    const input = document.getElementById("forgotEmailInput");
+    const status = document.getElementById("forgotStatus");
+    const email = input.value.trim();
+    if (!email) { status.textContent = "이메일을 입력해주세요."; return; }
+    const btn = document.getElementById("forgotSendBtn");
+    btn.disabled = true;
+    status.className = "login-status";
+    status.textContent = "보내는 중...";
+    try {
+      const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin + window.location.pathname,
+      });
+      if (error) throw error;
+      status.className = "login-status ok";
+      status.textContent = "메일함을 확인해주세요! 링크를 누르면 새 비밀번호를 정할 수 있어요.";
+      btn.disabled = true;
+    } catch (e) {
+      status.className = "login-status err";
+      status.textContent = "전송 실패: " + e.message;
+      btn.disabled = false;
+    }
+  });
+}
+
+// 비밀번호 재설정 이메일의 링크를 눌러 돌아왔을 때(Supabase가 자동으로 "복구 세션"을 만들어주고
+// PASSWORD_RECOVERY 이벤트를 쏴줌): 새 비밀번호를 직접 입력하는 화면. 관리자도 이 값을 알 수 없다.
+function renderSetNewPassword() {
+  root.innerHTML = `
+    <header class="hub-topbar">
+      <div class="wrap">
+        <span class="hub-mark">My도전</span><span class="hub-mark-sub">Note</span>
+      </div>
+    </header>
+    <div class="login-screen">
+      <div class="login-card">
+        <h1 class="login-title">새 비밀번호 설정</h1>
+        <p class="login-desc">본인만 알 수 있는 새 비밀번호를 입력해주세요.</p>
+        <input type="password" class="login-input" id="newPwInput" placeholder="새 비밀번호 (6자 이상)" minlength="6" autocomplete="new-password">
+        <input type="password" class="login-input" id="newPwConfirmInput" placeholder="새 비밀번호 확인" minlength="6" autocomplete="new-password">
+        <button type="button" class="login-btn" id="setNewPwBtn">비밀번호 설정하고 계속하기</button>
+        <p class="login-status" id="newPwStatus"></p>
+      </div>
+    </div>`;
+  document.getElementById("setNewPwBtn").addEventListener("click", async () => {
+    const pw = document.getElementById("newPwInput").value;
+    const pwConfirm = document.getElementById("newPwConfirmInput").value;
+    const status = document.getElementById("newPwStatus");
+    const btn = document.getElementById("setNewPwBtn");
+    if (pw.length < 6) { status.textContent = "6자 이상 입력해주세요."; status.className = "login-status err"; return; }
+    if (pw !== pwConfirm) { status.textContent = "비밀번호가 서로 달라요."; status.className = "login-status err"; return; }
+    btn.disabled = true;
+    status.className = "login-status";
+    status.textContent = "설정 중...";
+    try {
+      const { error } = await supabaseClient.auth.updateUser({ password: pw });
+      if (error) throw error;
+      history.replaceState(null, "", window.location.pathname);
+      status.className = "login-status ok";
+      status.textContent = "완료! 잠시 후 이동해요.";
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      if (session) setTimeout(() => proceedAfterLogin(session), 600);
+    } catch (e) {
+      status.className = "login-status err";
+      status.textContent = "설정 실패: " + e.message;
+      btn.disabled = false;
+    }
+  });
+}
+
 function getTokenHashParams() {
   const params = new URLSearchParams(window.location.search);
   const token_hash = params.get("token_hash");
@@ -697,7 +795,11 @@ async function boot() {
 // 먹통이 되므로, null이면 조용히 건너뛴다.
 if (supabaseClient) {
   supabaseClient.auth.onAuthStateChange(async (event, session) => {
-    if (event === "SIGNED_IN" && session) {
+    if (event === "PASSWORD_RECOVERY") {
+      // 비밀번호 재설정 이메일 링크로 돌아온 경우: 로그인 처리를 하지 말고
+      // 새 비밀번호를 직접 입력하는 화면부터 보여준다.
+      renderSetNewPassword();
+    } else if (event === "SIGNED_IN" && session) {
       await applyPendingProfileIfAny(session.user.id);
       await proceedAfterLogin(session);
     } else if (event === "SIGNED_OUT") {

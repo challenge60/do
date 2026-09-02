@@ -215,7 +215,7 @@ async function renderDashboard() {
       <td class="num">${fmtBytes(u.total_bytes)}</td>
       <td>
         <button type="button" class="user-action-btn suspend-btn" style="font-size:11px;padding:5px 8px;border-radius:6px;border:1px solid ${u.suspended ? "var(--teal)" : "var(--rose,#c0392b)"};background:#fff;color:${u.suspended ? "var(--teal)" : "var(--rose,#c0392b)"};cursor:pointer;white-space:nowrap;margin-bottom:4px;">${u.suspended ? "정지 해제" : "활동 정지"}</button>
-        <button type="button" class="user-action-btn resetpw-btn" style="font-size:11px;padding:5px 8px;border-radius:6px;border:1px solid var(--amber);background:#fff;color:var(--amber);cursor:pointer;white-space:nowrap;">임시 비번 발급</button>
+        <button type="button" class="user-action-btn resetpw-btn" style="font-size:11px;padding:5px 8px;border-radius:6px;border:1px solid var(--amber);background:#fff;color:var(--amber);cursor:pointer;white-space:nowrap;">비번 재설정 메일</button>
       </td>
     </tr>`).join("");
 
@@ -424,18 +424,18 @@ async function renderDashboard() {
   document.querySelectorAll(".resetpw-btn").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const row = btn.closest("tr");
-      const userId = row.dataset.userId;
-      const chars = "abcdefghjkmnpqrstuvwxyz23456789";
-      let tempPw = "";
-      for (let i = 0; i < 8; i++) tempPw += chars[Math.floor(Math.random() * chars.length)];
-      if (!confirm(`이 계정의 비밀번호를 임시 비밀번호로 바꿀까요?\n\n임시 비밀번호: ${tempPw}\n\n(확인을 누르면 바로 적용돼요. 이 비밀번호를 사용자에게 전달해주세요)`)) return;
+      const email = row.children[1].textContent.trim();
+      if (!email || email === "(이메일 없음)") { alert("이메일 정보가 없어서 보낼 수 없어요."); return; }
+      if (!confirm(`${email} 주소로 비밀번호 재설정 링크를 보낼까요?\n\n(관리자는 실제 비밀번호를 알 수 없고, 본인만 링크를 눌러 새 비밀번호를 정할 수 있어요)`)) return;
       btn.disabled = true;
       try {
-        const { error } = await supabaseClient.rpc("admin_reset_password", { target_user_id: userId, new_password: tempPw });
+        const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+          redirectTo: window.location.origin + window.location.pathname.replace(/admin\.html$/, "index.html"),
+        });
         if (error) throw error;
-        alert(`임시 비밀번호가 발급됐어요:\n\n${tempPw}\n\n이 비밀번호를 사용자에게 전달해주세요. (사용자는 로그인 후 '비밀번호 변경'으로 원하는 비밀번호로 바꿀 수 있어요)`);
+        alert(`${email} 주소로 재설정 메일을 보냈어요. 본인이 메일의 링크를 눌러 새 비밀번호를 직접 설정하면 돼요.`);
       } catch (e) {
-        alert("임시 비밀번호 발급 실패: " + e.message);
+        alert("전송 실패: " + e.message);
       } finally {
         btn.disabled = false;
       }
