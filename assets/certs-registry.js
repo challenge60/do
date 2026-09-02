@@ -28,4 +28,12 @@ const CERTS_REGISTRY = [
     questionCount: 778,
     shortCode: "c",
   },
+  {
+    id: "ergonomics-pildap",
+    name: "인간공학기사 필답",
+    subtitle: "필답형 · 인간공학",
+    path: "certs/ergonomics-pildap/index.html",
+    questionCount: 438,
+    shortCode: "e",
+  },
 ];

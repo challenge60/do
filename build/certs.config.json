@@ -32,6 +32,16 @@
       "count": 778,
       "yearRange": "2004–2026",
       "standaloneRepo": "c"
+    },
+    {
+      "id": "ergonomics-pildap",
+      "mark": "인간공학기사",
+      "shortMark": "인간공학",
+      "sub": "필답 노트",
+      "shortSub": "필답",
+      "titleText": "인간공학기사 필답 노트",
+      "count": 438,
+      "yearRange": "2014–2025"
     }
   ]
 }
