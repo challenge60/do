@@ -12,6 +12,17 @@
        사용자 컨펌을 받은 뒤에만 배포본(들)을 새로 만든다. */
 const APP_VERSION = "2026.08.26_23:06";
 
+/* ============ 강제 업데이트 임계값 ============
+   평소엔 빈 문자열("")로 둔다 — 이 경우 새 버전이 나와도 사용자가 원할 때 눌러서
+   새로고침하는 '일반 배너'만 뜬다(아래 새 버전 자동 감지 로직 참고).
+   문제 ID 구조 변경, 채점 로직 변경 등 "옛날 캐시로 계속 쓰면 DB와 충돌/오작동할 수 있는"
+   치명적 배포를 할 때만, 이 값을 그 배포의 APP_VERSION과 동일한 문자열로 채워서 커밋한다.
+   그러면 이 값보다 낮은(=이 배포 이전) APP_VERSION을 가진 클라이언트는 배너를 닫을 수 없고
+   몇 초 뒤 자동으로 새로고침된다. 이후 커밋에서는 다시 ""로 되돌려 평소 상태로 복귀시킨다.
+   (버전 문자열이 YYYY.MM.DD_HH.MM 형식으로 항상 자릿수가 고정돼 있어 문자열 비교만으로
+   시간 순서 비교가 가능하다.) */
+const FORCE_UPDATE_MIN_VERSION = "";
+
 /* ============ PWA 설치(앱처럼 구동) ============ */
 try{
 (function(){
@@ -6669,6 +6680,11 @@ document.addEventListener("keydown", (e)=>{
     if(!tag) return null;
     return tag.getAttribute("src").split("?")[0]; // 기존 ?v=해시는 떼고, 아래서 캐시무효화용 쿼리를 새로 붙인다
   }
+  function forceReload(){
+    const url = new URL(location.href);
+    url.searchParams.set("v", Date.now());
+    location.href = url.toString();
+  }
   async function checkForNewVersion(){
     try{
       const src = appJsSrc();
@@ -6676,25 +6692,51 @@ document.addEventListener("keydown", (e)=>{
       const res = await fetch(src + "?_check=" + Date.now(), { cache: "no-store" });
       if(!res.ok) return;
       const text = await res.text();
-      const m = text.match(/const APP_VERSION = "([^"]*)"/);
-      if(m && m[1] && m[1] !== APP_VERSION) showUpdateBanner();
+      const vMatch = text.match(/const APP_VERSION = "([^"]*)"/);
+      const fMatch = text.match(/const FORCE_UPDATE_MIN_VERSION = "([^"]*)"/);
+      const remoteVersion = vMatch && vMatch[1];
+      const forceMinVersion = fMatch && fMatch[1];
+      if(!remoteVersion || remoteVersion === APP_VERSION) return;
+      // 이 배포 이전 버전을 쓰는 클라이언트에게 필수 업데이트가 걸려 있는 경우 강제 새로고침
+      if(forceMinVersion && APP_VERSION < forceMinVersion){
+        showUpdateBanner(true);
+      } else {
+        showUpdateBanner(false);
+      }
     }catch(e){ /* 오프라인 등은 조용히 무시 */ }
   }
-  function showUpdateBanner(){
-    if(document.getElementById("versionUpdateBanner")) return;
+  function showUpdateBanner(critical){
+    const existing = document.getElementById("versionUpdateBanner");
+    if(existing){
+      if(critical && !existing.classList.contains("vub-critical")) existing.remove();
+      else return;
+    }
     const bar = document.createElement("div");
     bar.id = "versionUpdateBanner";
-    bar.className = "version-update-banner";
-    bar.innerHTML = `<span class="vub-text">🔄 새 버전이 있어요 · 탭해서 새로고침</span><span class="vub-close">✕</span>`;
-    bar.querySelector(".vub-text").addEventListener("click", ()=>{
-      const url = new URL(location.href);
-      url.searchParams.set("v", Date.now()); // 캐시를 우회하기 위한 값
-      location.href = url.toString();
-    });
-    bar.querySelector(".vub-close").addEventListener("click", (e)=>{
-      e.stopPropagation();
-      bar.remove();
-    });
+    bar.className = "version-update-banner" + (critical ? " vub-critical" : "");
+    if(critical){
+      let secondsLeft = 8;
+      bar.innerHTML = `<span class="vub-text">⚠️ 중요 업데이트가 있어 <b class="vub-countdown">${secondsLeft}</b>초 후 자동으로 새로고침됩니다</span>`;
+      const countdownEl = bar.querySelector(".vub-countdown");
+      const timer = setInterval(()=>{
+        secondsLeft -= 1;
+        if(secondsLeft <= 0){
+          clearInterval(timer);
+          forceReload();
+          return;
+        }
+        if(countdownEl) countdownEl.textContent = String(secondsLeft);
+      }, 1000);
+      // 치명적 업데이트는 닫기 버튼을 두지 않는다(닫아도 다음 재확인 때 다시 뜨고,
+      // 그 사이 옛날 데이터로 조작을 계속하면 DB와 충돌할 수 있는 상황을 막기 위함).
+    } else {
+      bar.innerHTML = `<span class="vub-text">🔄 새 버전이 있어요 · 탭해서 새로고침</span><span class="vub-close">✕</span>`;
+      bar.querySelector(".vub-text").addEventListener("click", forceReload);
+      bar.querySelector(".vub-close").addEventListener("click", (e)=>{
+        e.stopPropagation();
+        bar.remove();
+      });
+    }
     document.body.appendChild(bar);
   }
   setTimeout(checkForNewVersion, 4000); // 앱 켤 때 1차 확인
