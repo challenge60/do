@@ -164,6 +164,95 @@ async function downloadAllQuestionData(btn) {
   }
 }
 
+/* data.js 텍스트 안의 'const SAMPLE_DATA = [...]' 배열 부분만 정확히 찾아서,
+   해당 자격증의 question_overrides(전체 적용된 관리자 수정)를 id 기준으로 덮어쓴 뒤
+   다시 그 자리에 끼워넣는다. 다른 부분(UNIT_TAXONOMY, IMAGES, EXAM_CONFIG 등)은 그대로 둔다. */
+function mergeOverridesIntoDataJs(jsText, overrides) {
+  if (!overrides || !overrides.length) return jsText;
+  const marker = "const SAMPLE_DATA";
+  const markerIdx = jsText.indexOf(marker);
+  if (markerIdx === -1) throw new Error("SAMPLE_DATA 선언을 찾을 수 없어요");
+  const arrStart = jsText.indexOf("[", markerIdx);
+  let depth = 0, i = arrStart;
+  for (; i < jsText.length; i++) {
+    if (jsText[i] === "[") depth++;
+    else if (jsText[i] === "]") { depth--; if (depth === 0) break; }
+  }
+  const arrEnd = i + 1;
+  const arrText = jsText.slice(arrStart, arrEnd);
+  // eslint-disable-next-line no-new-func
+  const data = new Function(`return ${arrText};`)();
+  const byId = {};
+  overrides.forEach((o) => { byId[o.question_id] = o; });
+  const merged = data.map((q) => {
+    const ov = byId[q.id];
+    if (!ov) return q;
+    return {
+      ...q,
+      question: ov.question ?? q.question,
+      answer: ov.answer ?? q.answer,
+      images: ov.images ?? q.images,
+      tags: ov.tags ?? q.tags,
+      unitMajor: ov.unit_major ?? q.unitMajor,
+      unitMinor: ov.unit_minor ?? q.unitMinor,
+    };
+  });
+  return jsText.slice(0, arrStart) + JSON.stringify(merged) + jsText.slice(arrEnd);
+}
+
+async function downloadMergedQuestionData(btn) {
+  const originalText = btn.textContent;
+  const certs = typeof CERTS_REGISTRY !== "undefined" ? CERTS_REGISTRY : [];
+  btn.disabled = true;
+  btn.textContent = "확인 중…";
+  try {
+    const { data: overrides, error } = await supabaseClient.from("question_overrides").select("*");
+    if (error) throw error;
+    if (!overrides || !overrides.length) {
+      alert("현재 '전체 적용됨' 상태인 관리자 수정이 없어요. 병합할 내용이 없습니다.");
+      return;
+    }
+    const byCert = {};
+    overrides.forEach((o) => { (byCert[o.cert_id] ||= []).push(o); });
+    const summary = certs.map((c) => `${c.name}: ${(byCert[c.id] || []).length}건`).join("\n");
+    const ok = confirm(
+      `현재 '전체 적용됨' 상태로 쌓인 관리자 수정사항을 원본 데이터에 병합해서 새 파일을 만들까요?\n\n${summary}\n\n` +
+      `⚠️ 다운로드된 파일로 실제 certs/<자격증>/data.js를 직접 교체해야 반영됩니다(자동 반영 아님).\n` +
+      `교체하고 나면 그 수정사항들이 새로운 '원본'이 되어, 문제 화면의 '전체 적용됨' 배지는 사라져요.\n\n` +
+      `확인: 병합된 파일 다운로드 / 취소: 취소`
+    );
+    if (!ok) return;
+
+    btn.textContent = "병합 중…";
+    const zip = new JSZip();
+    for (const cert of certs) {
+      const res = await fetch(cert.path.replace(/index\.html$/, "data.js"), { cache: "no-store" });
+      if (!res.ok) throw new Error(`${cert.name} data.js 다운로드 실패 (${res.status})`);
+      const text = await res.text();
+      const mergedText = mergeOverridesIntoDataJs(text, byCert[cert.id] || []);
+      zip.file(`${cert.id}.data.js`, mergedText);
+    }
+    const blob = await zip.generateAsync({ type: "blob" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+    a.href = url;
+    a.download = `question-data-merged_${stamp}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    btn.textContent = "병합 완료 ✓";
+  } catch (e) {
+    console.error(e);
+    alert("병합 백업 실패: " + e.message);
+    btn.textContent = originalText;
+  } finally {
+    btn.disabled = false;
+    setTimeout(() => { btn.textContent = originalText; }, 3000);
+  }
+}
+
 async function renderDashboard() {
   renderLoading();
   let summary, userStats, commentedQuestions, pendingApprovals;
@@ -331,8 +420,18 @@ async function renderDashboard() {
         </p>
         <button type="button" id="allDataBtn" style="margin-bottom:12px;
           border:1px solid var(--teal);background:var(--teal);color:#fff;font-size:13px;font-weight:600;padding:9px 16px;border-radius:10px;cursor:pointer;">
-          전체 자격증 문제 데이터 ZIP으로 한 번에 다운로드
+          전체 자격증 문제 데이터 ZIP으로 한 번에 다운로드 (원본 그대로)
         </button>
+        <button type="button" id="mergeDataBtn" style="margin-bottom:12px;margin-left:8px;
+          border:1px solid var(--amber);background:#fff;color:var(--amber);font-size:13px;font-weight:600;padding:9px 16px;border-radius:10px;cursor:pointer;">
+          🔀 전체 적용된 수정사항 병합해서 다운로드
+        </button>
+        <p style="font-size:12px;color:var(--muted);margin:6px 0 0;">
+          "병합해서 다운로드"는 Supabase에 '전체 적용됨' 상태로 쌓인 관리자 수정사항을 원본에
+          합쳐서 새 <code>data.js</code>를 만들어줘요. 대량 수정 후 한 번씩 이걸로 원본 자체를
+          정리해두면 안전해요(다운로드만 될 뿐, 실제 반영은 이 파일로 certs 폴더의 data.js를
+          직접 교체해야 해요).
+        </p>
         <div style="margin-top:6px;">${questionDataLinks || `<p class="admin-empty" style="padding:8px 0;">등록된 자격증이 없습니다</p>`}</div>
       </div>
 
@@ -442,6 +541,7 @@ async function renderDashboard() {
     });
   });
   document.getElementById("allDataBtn").addEventListener("click", (e) => downloadAllQuestionData(e.currentTarget));
+  document.getElementById("mergeDataBtn").addEventListener("click", (e) => downloadMergedQuestionData(e.currentTarget));
 }
 
 async function boot() {
