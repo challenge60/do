@@ -236,9 +236,29 @@ select id from auth.users where email = '등록할이메일@example.com';
   승인·거절 버튼. 아래 "회원가입·로그인 시스템" 섹션 참고
 - **💬 오답의견 올라온 문제**: 최신순으로 문제별 댓글 개수·미리보기 + "문제로 이동" 딥링크
   (`?q=문항ID` 파라미터로 그 문제만 바로 여는 기능, `engine/app.js` 최하단에 구현)
+- **계정별 상세 표의 관리 버튼**: 등급 드롭다운(편집자 선택 시 종목별 체크박스 노출,
+  `profiles.editor_certs`) · **임시 비밀번호 발급**(`admin_reset_password()` RPC) ·
+  **활동 정지/해제**(`admin_set_suspended()` RPC, `auth.users.banned_until` 설정).
+  AI 없이도 관리자가 직접 회원 관리를 할 수 있게 만든 셀프서비스 기능들
 
 관련 파일: `admin.html`, `assets/admin.js`, `assets/admin.css`
 (engine 빌드 대상 아님 — hub.js/hub.css처럼 `do` 저장소에서 직접 수정)
+
+### ⚠️ SECURITY DEFINER 함수에서 crypt()/gen_salt() 쓸 때 주의 (한 번 겪은 버그)
+
+`admin_reset_password()`처럼 비밀번호를 직접 해싱하는 RPC를 새로 만들 때, 함수에
+`set search_path = public`만 넣으면 **`gen_salt(unknown) does not exist` 에러**가 남.
+이 프로젝트의 Supabase에서는 `crypt`/`gen_salt`(pgcrypto) 함수가 `public`이 아니라
+**`extensions` 스키마**에 설치되어 있기 때문. `set search_path = public, extensions`로
+두 스키마를 다 넣거나, `extensions.crypt(...)` / `extensions.gen_salt(...)`처럼 스키마를
+명시해서 호출해야 함.
+
+이 버그는 **SQL 에디터에서 직접 실행할 때는 안 걸리고**(에디터의 기본 search_path엔
+extensions가 포함되어 있음), **RPC 함수로 감싸서 다른 사용자가 호출할 때만** 드러남 —
+그래서 배포 직후엔 멀쩡해 보이다가 실제로 관리자가 버튼을 눌러보고서야 발견됐음.
+새 RPC를 admin.js 등에서 연결하기 전에, 관리자 세션을 흉내내서
+(`select set_config('request.jwt.claim.sub', '<관리자 user_id>', true); select set_config('role', 'authenticated', true);`
+그 다음 RPC를 직접 호출) SQL 에디터에서 먼저 실제로 실행해보고 검증하는 습관이 유용함.
 
 ### 설정 화면의 로컬 백업/복원 메뉴 (허브에서는 관리자 전용)
 
