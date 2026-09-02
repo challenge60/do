@@ -10,7 +10,7 @@
        세 가지 다 파일을 건드릴 때마다 이 주석부터 확인할 것.
    [3] 엔진 수정 후에는 곧바로 배포본을 만들지 말고, 무엇을 고쳤는지 먼저 설명하고
        사용자 컨펌을 받은 뒤에만 배포본(들)을 새로 만든다. */
-const APP_VERSION = "2026.09.02_17.59";
+const APP_VERSION = "2026.09.02_18.07";
 
 /* ============ PWA 설치(앱처럼 구동) ============ */
 try{
@@ -2922,23 +2922,19 @@ function renderCard(){
   const modeSwitchable = ["unit","unitMinor","year","freq"].includes(state.mode);
   const modeTagLabel = isVoice ? "🔊 음성학습모드" : (isPractice ? "📖 연습모드" : "📝 시험모드");
   const modeTag = (isVoice || modeSwitchable) ? `<button type="button" class="tag mode mode-tag-btn" id="modeTagBtn">${modeTagLabel} ▾</button>` : "";
-  // 관리자 전용: 이 문항이 "전체 적용됨"(발행된 관리자 수정)인지, 아니면 "내 개인 수정만 있고
-  // 아직 전체 적용은 안 됨"인지 한눈에 구분하기 위한 배지. 개인 수정 상태를 확인 안 하고
-  // '전체 적용'을 눌렀다고 착각한 채 넘어가는 실수를 방지하기 위해 추가.
-  // 발행본과 로컬 수정이 둘 다 있을 때는, 그 둘의 실제 '내용'이 같은지까지 비교해서
-  // 표시한다(단순히 둘 다 있다는 사실만으로는 재발행이 필요한지 알 수 없어 헷갈렸음).
-  const editStatusTag = (typeof window !== "undefined" && window.isAdmin) ? (()=>{
-    const adminOv = adminOverrideFor(q.id);
-    const localEdit = store.edits && store.edits[q.id];
-    const hasAdminOv = !!adminOv, hasLocalEdit = !!localEdit;
-    const FIELDS = ["question","answer","images","tags","unitMajor","unitMinor"];
-    const sameContent = hasAdminOv && hasLocalEdit &&
-      FIELDS.every(f => JSON.stringify(adminOv[f]) === JSON.stringify(localEdit[f]));
-    if(hasLocalEdit && !hasAdminOv) return `<span class="tag" style="background:#fdecea;color:#c0392b;border:1px solid #e8a49b;">⚠️ 개인 수정만 있음(전체 미적용)</span>`;
-    if(hasAdminOv && hasLocalEdit && !sameContent) return `<span class="tag" style="background:#fdecea;color:#c0392b;border:1px solid #e8a49b;">⚠️ 발행본과 다른 수정이 남아있음(재발행 필요)</span>`;
-    if(hasAdminOv) return `<span class="tag" style="background:#e8f4ea;color:#1e7a3c;border:1px solid #a6d9b3;">🌐 전체 적용됨</span>`;
-    return "";
-  })() : "";
+  // 이 문항의 편집 상태를 나타내는 작은 배지 두 종류(수정 버튼이 있는 줄의 맨 왼쪽에 표시):
+  // - "My"(모든 사용자에게 보임): 이 기기에 내가 개인적으로 수정한 기록이 있음
+  // - "All"(관리자·편집자에게만 보임): 관리자가 편집 후 전체 사용자에게 적용(발행)한 문항임
+  //   (둘 다 해당하면 나란히 뜸 — 관리자가 전체 적용한 뒤 나만 또 따로 고친 경우)
+  const editStatusBadges = (()=>{
+    const hasLocalEdit = !!(store.edits && store.edits[q.id]);
+    const canSeeAllBadge = typeof window !== "undefined" && (window.isAdmin || window.canPublishOverride);
+    const hasAdminOv = canSeeAllBadge && !!adminOverrideFor(q.id);
+    if(!hasLocalEdit && !hasAdminOv) return "";
+    const allBadge = hasAdminOv ? `<span class="edit-status-badge all" title="관리자 편집 후 전체 적용된 문제예요">All</span>` : "";
+    const myBadge = hasLocalEdit ? `<span class="edit-status-badge my" title="내가 수정한 내용이에요">My</span>` : "";
+    return `<div class="card-edit-status-badges">${allBadge}${myBadge}</div>`;
+  })();
   setPageBar(titleLabel, {
     rightHtml: `<button class="pdf-mini" id="pdfBtn" title="현재 세트 PDF로 저장">🖨 PDF</button>`,
     rightId: "pdfBtn",
@@ -2956,10 +2952,10 @@ function renderCard(){
         ${combinedTag}
         ${starDupTag}
         ${accTag}
-        ${editStatusTag}
       </div>
     </div>
     <div class="card-box-wrap">
+      ${editStatusBadges}
       <div class="card-corner-actions">
         <button class="corner-emoji-btn" id="voiceModeBtn" title="음성모드 전환">🔊</button>
         <button class="corner-emoji-btn" id="starBtn" title="즐겨찾기">☆</button>

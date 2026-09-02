@@ -61,6 +61,19 @@
   /* 카드 우측 상단 바깥에 붙는 즐겨찾기/수정 원형 이모지 버튼 */
   .card-box-wrap{position:relative;}
   .card-corner-actions{position:absolute;top:-10px;right:4px;display:flex;gap:6px;z-index:3;}
+  .card-edit-status-badges{position:absolute;top:-10px;left:4px;display:flex;gap:4px;z-index:3;}
+  .edit-status-badge{
+    display:inline-block;
+    font-size:10px;
+    font-weight:800;
+    line-height:1;
+    padding:4px 6px;
+    border-radius:999px;
+    cursor:default;
+    box-shadow:0 1px 3px rgba(0,0,0,0.15);
+  }
+  .edit-status-badge.all{background:var(--amber);color:#fff;}
+  .edit-status-badge.my{background:var(--teal);color:#fff;}
   .corner-emoji-btn{
     width:34px;height:34px;border-radius:50%;border:1px solid var(--line);
     background:var(--card);font-size:1.02rem;display:flex;align-items:center;justify-content:center;
