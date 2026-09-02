@@ -42,6 +42,16 @@
       "titleText": "인간공학기사 필답 노트",
       "count": 438,
       "yearRange": "2014–2025"
+    },
+    {
+      "id": "concrete-siljak",
+      "mark": "콘크리트기사",
+      "shortMark": "콘크리트",
+      "sub": "실기 필답 노트",
+      "shortSub": "필답",
+      "titleText": "콘크리트기사 실기 필답 노트",
+      "count": 214,
+      "yearRange": "2012–2024"
     }
   ]
 }

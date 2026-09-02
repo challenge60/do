@@ -10,7 +10,7 @@
        세 가지 다 파일을 건드릴 때마다 이 주석부터 확인할 것.
    [3] 엔진 수정 후에는 곧바로 배포본을 만들지 말고, 무엇을 고쳤는지 먼저 설명하고
        사용자 컨펌을 받은 뒤에만 배포본(들)을 새로 만든다. */
-const APP_VERSION = "2026.09.03_07.40";
+const APP_VERSION = "2026.09.03_08.19";
 
 /* ============ 강제 업데이트 임계값 ============
    평소엔 빈 문자열("")로 둔다 — 이 경우 새 버전이 나와도 사용자가 원할 때 눌러서
@@ -409,7 +409,7 @@ async function maybeAskAdminPublish(id, payload){
 /* ============ 활성 자격증 설정 적용 (기본 EXAM_CONFIG 또는 가져온 데이터의 examConfig) ============ */
 // 자격증별 실기/필답형 구분(짧은 표기). CERT_ID는 data.js가 정의하는 전역 상수.
 // 새 자격증을 추가할 때 이 표에 없으면 cfg.subtitle을 그대로 쓰도록 폴백 처리됨.
-const SHORT_SUB_BY_CERT = { "arch-siljak":"실기", "waterproof-siljak":"실기", "safety-siljak":"필답형", "ergonomics-pildap":"필답" };
+const SHORT_SUB_BY_CERT = { "arch-siljak":"실기", "waterproof-siljak":"실기", "safety-siljak":"필답형", "ergonomics-pildap":"필답", "concrete-siljak":"실기" };
 function activeExamConfig(){
   return store.examConfig || EXAM_CONFIG;
 }

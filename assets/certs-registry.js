@@ -36,4 +36,12 @@ const CERTS_REGISTRY = [
     questionCount: 438,
     shortCode: "e",
   },
+  {
+    id: "concrete-siljak",
+    name: "콘크리트기사 실기",
+    subtitle: "필답형 · 콘크리트공사",
+    path: "certs/concrete-siljak/index.html",
+    questionCount: 214,
+    shortCode: "f",
+  },
 ];
