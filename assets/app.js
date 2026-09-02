@@ -10,7 +10,7 @@
        세 가지 다 파일을 건드릴 때마다 이 주석부터 확인할 것.
    [3] 엔진 수정 후에는 곧바로 배포본을 만들지 말고, 무엇을 고쳤는지 먼저 설명하고
        사용자 컨펌을 받은 뒤에만 배포본(들)을 새로 만든다. */
-const APP_VERSION = "2026.09.02_18.19";
+const APP_VERSION = "2026.09.02_18.25";
 
 /* ============ PWA 설치(앱처럼 구동) ============ */
 try{
@@ -5598,7 +5598,7 @@ function inlineImagesOnly(text, images){
 }
 function renderTextWithImages(text, images, otherText, extraLabelHtml){
   const safe = escapeHtml(text || "");
-  const labelHtml = `<span class="qa-label">문제</span>${extraLabelHtml || ""}`;
+  const labelHtml = `<span class="qa-label">문제</span>${extraLabelHtml ? `<span class="card-edit-status-badges-inline">${extraLabelHtml}</span>` : ""}`;
   if(!images || !images.length){
     return `<div class="q-text">${labelHtml}${renderBoxMarkers(safe)}</div>`;
   }

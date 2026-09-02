@@ -5598,7 +5598,7 @@ function inlineImagesOnly(text, images){
 }
 function renderTextWithImages(text, images, otherText, extraLabelHtml){
   const safe = escapeHtml(text || "");
-  const labelHtml = `<span class="qa-label">문제</span>${extraLabelHtml || ""}`;
+  const labelHtml = `<span class="qa-label">문제</span>${extraLabelHtml ? `<span class="card-edit-status-badges-inline">${extraLabelHtml}</span>` : ""}`;
   if(!images || !images.length){
     return `<div class="q-text">${labelHtml}${renderBoxMarkers(safe)}</div>`;
   }

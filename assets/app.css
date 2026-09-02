@@ -70,7 +70,6 @@
     border-radius:999px;
     cursor:default;
     box-shadow:0 1px 3px rgba(0,0,0,0.15);
-    margin-left:6px;
     vertical-align:middle;
   }
   .edit-status-badge.all{background:var(--amber);color:#fff;}
@@ -646,6 +645,11 @@
     padding:2px 12px;border-radius:99px;color:#fff;background:var(--teal);
   }
   .qa-label.answer{background:var(--amber);}
+  /* "문제" 라벨과 같은 줄(같은 top 위치)에서, 박스 오른쪽 끝에 붙는 My/All 배지 자리 */
+  .card-edit-status-badges-inline{
+    position:absolute;top:-11px;right:14px;
+    display:flex;gap:4px;z-index:2;
+  }
   .q-text.qa-box, div.q-text{
     position:relative;
     background:var(--teal-soft);border:1.5px solid var(--teal);border-radius:12px;
