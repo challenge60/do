@@ -383,10 +383,15 @@ function withEdits(q){
    (관리자뿐 아니라 편집자 등급도 canPublishOverride가 true로 설정됨) */
 async function maybeAskAdminPublish(id, payload){
   if(typeof window === "undefined" || !window.canPublishOverride || typeof window.publishAdminOverride !== "function") return;
+  const touchesMeta = ["year","round","no","points"].some(k=> Object.prototype.hasOwnProperty.call(payload, k));
+  const metaWarning = touchesMeta
+    ? "\n\n⚠️ 이 수정에는 연도·회차·순번·배점 변경이 포함돼 있어요. 이 값들은 연도별·빈도별 화면과 모의고사 회차 구성에도 쓰이니, 다른 문제와 연도·회차가 겹치지 않는지 한 번 더 확인해주세요."
+    : "";
   const ok = confirm(
     "이 수정을 이 문제의 기본값으로 적용할까요?\n\n" +
     "적용하면, 이 문제를 개인적으로 아직 수정하지 않은 모든 사용자에게 이 내용이 보이게 됩니다.\n" +
-    "(이미 이 문제를 개인적으로 수정해 둔 사용자는 계속 자신의 수정본을 보게 되어 영향받지 않습니다)"
+    "(이미 이 문제를 개인적으로 수정해 둔 사용자는 계속 자신의 수정본을 보게 되어 영향받지 않습니다)" +
+    metaWarning
   );
   if(!ok) return;
   try{
@@ -6104,6 +6109,16 @@ function openEditModal(id, onSaved){
         </div>
       </div>
       <div class="edit-field">
+        <label>출제 정보 <small style="font-weight:400;color:var(--muted);">(연도·회차가 잘못 분류된 경우 여기서 고치세요. 문제 고유 id는 안 바뀌니 학습기록·즐겨찾기는 그대로 유지돼요)</small></label>
+        <div class="btn-row" style="gap:8px;">
+          <input type="number" class="search-box" id="editYear" placeholder="연도" value="${original.year!=null?original.year:''}" style="flex:1;">
+          <input type="number" class="search-box" id="editRound" placeholder="회차" value="${original.round!=null?original.round:''}" style="flex:1;">
+          <input type="number" class="search-box" id="editNo" placeholder="순번" value="${original.no!=null?original.no:''}" style="flex:1;">
+          <input type="number" class="search-box" id="editPoints" placeholder="배점" value="${original.points!=null?original.points:''}" style="flex:1;">
+        </div>
+        <p style="font-size:0.74rem;color:var(--muted);margin-top:4px;">연도를 비워두면 "연도 미상" 문제로 분류돼요.</p>
+      </div>
+      <div class="edit-field">
         <label>이미지 (<span id="editImageCount">${workingImages.length}</span>장) <small style="font-weight:400;color:var(--muted);">(파일 선택 외에도 이미지를 이 영역으로 드래그하거나, 복사한 이미지를 여기에 붙여넣기(Ctrl+V) 할 수 있어요)</small></label>
         <div id="editImageDropzone" style="border:1.5px dashed var(--line);border-radius:10px;padding:10px;transition:border-color .15s,background .15s;">
           <div id="editImagePreview">${renderPreview()}</div>
@@ -6367,28 +6382,49 @@ function openEditModal(id, onSaved){
     const aBoxOpen = (aText.match(/\{\{BOX\}\}/g)||[]).length;
     const aBoxClose = (aText.match(/\{\{\/BOX\}\}/g)||[]).length;
     if(aBoxOpen !== aBoxClose){ alert("박스 표시({{BOX}}/{{/BOX}}) 개수가 맞지 않습니다. 정답 내용을 확인해주세요."); return; }
+    // 출제 정보(연도/회차/순번/배점) 파싱 + 검증. 이 필드들은 문항의 "신원(id)"과는 무관한
+    // 데이터일 뿐이라 자유롭게 고칠 수 있게 하되, 값이 이상하면(연도 범위 밖 등) 저장을 막는다.
+    const parseNum = (elId)=>{
+      const raw = overlay.querySelector(elId).value.trim();
+      if(raw === "") return null;
+      const n = Number(raw);
+      return Number.isFinite(n) ? n : NaN;
+    };
+    const newYear = parseNum("#editYear");
+    const newRound = parseNum("#editRound");
+    const newNo = parseNum("#editNo");
+    const newPoints = parseNum("#editPoints");
+    if([newYear,newRound,newNo,newPoints].some(v=>Number.isNaN(v))){ alert("연도·회차·순번·배점은 숫자만 입력해주세요."); return; }
+    if(newYear!=null && (newYear<1900 || newYear>2100)){ alert("연도는 1900~2100 사이로 입력해주세요."); return; }
+    if(newRound!=null && newRound<=0){ alert("회차는 1 이상의 숫자로 입력해주세요."); return; }
     if(!store.edits) store.edits = {};
     const dupIds = findDuplicateIds(id);
-    let targets = [id];
+    let dupTargets = [];
     if(dupIds.length){
-      const applyAll = confirm(`이 문제는 중복 출제된 문제가 ${dupIds.length}개 더 있습니다.\n중복된 문제도 모두 함께 수정할까요?\n\n확인: 중복 문제 모두 수정\n취소: 이 문제만 수정`);
-      if(applyAll) targets = targets.concat(dupIds);
+      const applyAll = confirm(`이 문제는 중복 출제된 문제가 ${dupIds.length}개 더 있습니다.\n중복된 문제도 모두 함께 수정할까요?\n\n(문제/정답/키워드/단원/이미지만 함께 적용되고, 연도·회차·순번·배점은 이 문제에만 적용됩니다 — 중복 문제들은 원래 서로 다른 연도·회차에 출제된 별개 기록이기 때문이에요)\n\n확인: 중복 문제 모두 수정\n취소: 이 문제만 수정`);
+      if(applyAll) dupTargets = dupIds;
     }
     const tagsText = overlay.querySelector("#editTags").value || "";
     const tagsArr = tagsText.split(",").map(t=>t.trim()).filter(Boolean).slice(0,6);
     const newUnitMajor = overlay.querySelector("#editUnitMajor").value;
     const newUnitMinor = overlay.querySelector("#editUnitMinor").value;
-    const editPayload = {question:qText, answer:aText, images:workingImages, tags:tagsArr, unitMajor:newUnitMajor, unitMinor:newUnitMinor};
-    targets.forEach(tid=>{
-      store.edits[tid] = editPayload;
-    });
+    // 문제/정답/키워드/단원/이미지는 "중복 문제도 함께 수정"을 선택했다면 그 문항들에도 그대로 적용.
+    const sharedPayload = {question:qText, answer:aText, images:workingImages, tags:tagsArr, unitMajor:newUnitMajor, unitMinor:newUnitMinor};
+    // 연도/회차/순번/배점은 이 문항 하나에만 적용 — 중복 그룹의 다른 문항들은 원래
+    // 서로 다른 시점에 출제된 별개 기록이므로 절대로 같이 덮어쓰면 안 된다.
+    const metaPayload = {year:newYear, round:newRound, no:newNo, points:newPoints};
+    const editPayload = {...sharedPayload, ...metaPayload};
+    store.edits[id] = editPayload;
+    dupTargets.forEach(tid=>{ store.edits[tid] = sharedPayload; });
+    const targets = [id, ...dupTargets];
     const ok = saveStore();
     if(!ok) return; // 저장 실패 시 편집창을 닫지 않고 이미지를 줄여 재시도할 수 있게 유지
     close();
     toast(targets.length>1 ? `중복 문제 ${targets.length}개를 함께 수정했습니다` : "저장되었습니다");
     if(onSaved) onSaved();
     // 관리자라면, 이 수정을 전체 사용자 기본값으로도 적용할지 물어본다 (개인 수정은 이미 위에서 저장 완료됨)
-    targets.forEach(tid=>{ maybeAskAdminPublish(tid, editPayload); });
+    maybeAskAdminPublish(id, editPayload);
+    dupTargets.forEach(tid=>{ maybeAskAdminPublish(tid, sharedPayload); });
   });
 }
 
