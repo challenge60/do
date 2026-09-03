@@ -194,9 +194,12 @@
     // merged.question 등이 undefined면(=이번에도 이전에도 값이 없었던 필드) 키 자체를
     // 넣지 않는다. { question: undefined, ... }처럼 객체에 명시적으로 undefined를
     // 넣으면, withEdits()의 스프레드 병합({...q, ...adminOv})이 "값이 없다"가 아니라
-    // "값을 undefined로 덮어써라"로 동작해서 원래 있던 문제/정답 텍스트가 화면에서
+    // "값을 undefined/null로 덮어써라"로 동작해서 원래 있던 문제/정답 텍스트가 화면에서
     // 그대로 사라져버린다. 방금 이 버그로 실제 화면이 깨졌었다.
-    const setIfDefined = (key, value) => { if (value !== undefined) nextLocal[key] = value; };
+    // (1차 수정 때는 undefined만 걸렀는데, 두 번째로 같은 문제를 또 수정할 때는
+    // DB에서 다시 읽어온 기존값이 undefined가 아니라 이미 null이라서 그대로 통과돼
+    // 버렸다 — null도 함께 걸러야 한다)
+    const setIfDefined = (key, value) => { if (value != null) nextLocal[key] = value; };
     setIfDefined("question", merged.question);
     setIfDefined("answer", merged.answer);
     setIfDefined("images", merged.images);
