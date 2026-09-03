@@ -10,7 +10,7 @@
        세 가지 다 파일을 건드릴 때마다 이 주석부터 확인할 것.
    [3] 엔진 수정 후에는 곧바로 배포본을 만들지 말고, 무엇을 고쳤는지 먼저 설명하고
        사용자 컨펌을 받은 뒤에만 배포본(들)을 새로 만든다. */
-const APP_VERSION = "2026.09.03_09.16";
+const APP_VERSION = "2026.09.03_09.33";
 
 /* ============ 강제 업데이트 임계값 ============
    평소엔 빈 문자열("")로 둔다 — 이 경우 새 버전이 나와도 사용자가 원할 때 눌러서
@@ -2938,6 +2938,9 @@ function renderCard(){
   const mainLabel = yearRoundLabel(q, multiRound);
   // 연도-회차-문항번호 (배점) 형식으로 한 태그에 합쳐서 표시. 예: 22-2-20 (4)
   const combinedTag = `<span class="tag freq">${mainLabel}${q.no?`-${q.no}`:""}${q.points?` (${q.points})`:""}</span>`;
+  // 출제 정보(연도/회차/순번/배점) 수정 버튼: 관리자·편집자에게만 노출
+  const canEditMeta = typeof window !== "undefined" && (window.isAdmin || window.canPublishOverride);
+  const metaEditBtn = canEditMeta ? `<button type="button" class="tag meta-edit-btn" id="metaEditBtn" title="출제 정보 수정">✎</button>` : "";
   const acc = questionAccuracy(q.id);
   const accTag = acc!==null ? `<span class="tag acc ${acc<50?'low':''}">정답률 ${acc}%</span>` : "";
   // 별점 + 실제 출제 연도-회차 목록(최신순)을 하나의 태그로 합쳐서 표시. 예: ★★★( 22-2,18-1,11-1 )
@@ -2985,6 +2988,7 @@ function renderCard(){
         </select>
         ${modeTag}
         ${combinedTag}
+        ${metaEditBtn}
         ${starDupTag}
         ${accTag}
       </div>
@@ -3093,6 +3097,8 @@ function renderCard(){
   const modeTagBtnEl = document.getElementById("modeTagBtn");
   if(modeTagBtnEl) modeTagBtnEl.addEventListener("click", openStudyModeSwitchModal);
   document.getElementById("editBtn").addEventListener("click", ()=> openEditModal(q.id, ()=> renderCard()));
+  const metaEditBtnEl = document.getElementById("metaEditBtn");
+  if(metaEditBtnEl) metaEditBtnEl.addEventListener("click", ()=> openMetaEditModal(q.id, ()=> renderCard()));
   document.getElementById("aiHelpBtn").addEventListener("click", ()=> openAiHelpModal(q));
   document.getElementById("shareBtn").addEventListener("click", ()=> openShareOptionsModal(q));
   const commentBtnEl = document.getElementById("commentBtn");
@@ -6050,6 +6056,76 @@ function openCardModal(id){
   });
 }
 
+/* ---- 출제 정보(연도/회차/순번/배점) 전용 수정 팝업 (관리자·편집자 전용) ----
+   문제/정답 본문과 완전히 분리된 별도 팝업. 이 필드들은 문항의 "신원(id)"과는
+   무관한 데이터일 뿐이라 자유롭게 고칠 수 있게 하되, 문항 id 자체는 절대 건드리지
+   않으므로 학습기록·즐겨찾기·공유링크는 그대로 유지된다.
+   중복 출제(같은 문제, 다른 연도) 그룹의 다른 문항에는 절대 전파하지 않는다 —
+   각 문항이 실제로 서로 다른 시점에 출제된 별개 기록이기 때문. */
+function openMetaEditModal(id, onSaved){
+  const original = getData().find(d=>d.id===id);
+  if(!original) return;
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="modal-box">
+      <span class="close-x">✕</span>
+      <h3>출제 정보 수정</h3>
+      <p style="font-size:0.78rem;color:var(--muted);margin-top:-4px;">연도를 비워두면 "연도 미상" 문제로 분류돼요. 문제 고유 id는 안 바뀌니 학습기록·즐겨찾기는 그대로 유지돼요.</p>
+      <div class="edit-field">
+        <label>연도</label>
+        <input type="number" class="search-box" id="metaYear" placeholder="예: 2024" value="${original.year!=null?original.year:''}">
+      </div>
+      <div class="edit-field">
+        <label>회차</label>
+        <input type="number" class="search-box" id="metaRound" placeholder="예: 3" value="${original.round!=null?original.round:''}">
+      </div>
+      <div class="edit-field">
+        <label>순번</label>
+        <input type="number" class="search-box" id="metaNo" placeholder="예: 1" value="${original.no!=null?original.no:''}">
+      </div>
+      <div class="edit-field">
+        <label>배점</label>
+        <input type="number" class="search-box" id="metaPoints" placeholder="예: 4" value="${original.points!=null?original.points:''}">
+      </div>
+      <div class="btn-row" style="margin-top:18px;">
+        <button class="btn ghost" id="metaCancel">취소</button>
+        <button class="btn primary" id="metaSave">저장</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  const close = ()=> overlay.remove();
+  overlay.querySelector(".close-x").addEventListener("click", close);
+  overlay.querySelector("#metaCancel").addEventListener("click", close);
+  overlay.addEventListener("click", (e)=>{ if(e.target===overlay) close(); });
+  overlay.querySelector("#metaSave").addEventListener("click", ()=>{
+    const parseNum = (elId)=>{
+      const raw = overlay.querySelector(elId).value.trim();
+      if(raw === "") return null;
+      const n = Number(raw);
+      return Number.isFinite(n) ? n : NaN;
+    };
+    const newYear = parseNum("#metaYear");
+    const newRound = parseNum("#metaRound");
+    const newNo = parseNum("#metaNo");
+    const newPoints = parseNum("#metaPoints");
+    if([newYear,newRound,newNo,newPoints].some(v=>Number.isNaN(v))){ alert("연도·회차·순번·배점은 숫자만 입력해주세요."); return; }
+    if(newYear!=null && (newYear<1900 || newYear>2100)){ alert("연도는 1900~2100 사이로 입력해주세요."); return; }
+    if(newRound!=null && newRound<=0){ alert("회차는 1 이상의 숫자로 입력해주세요."); return; }
+    if(!store.edits) store.edits = {};
+    const metaPayload = {year:newYear, round:newRound, no:newNo, points:newPoints};
+    // 이미 문제/정답 등을 고쳐둔 상태가 있을 수 있으니 덮어쓰지 않고 병합한다.
+    store.edits[id] = {...store.edits[id], ...metaPayload};
+    const ok = saveStore();
+    if(!ok) return;
+    close();
+    toast("출제 정보가 저장되었습니다");
+    if(onSaved) onSaved();
+    maybeAskAdminPublish(id, store.edits[id]);
+  });
+}
+
 /* ---- 문제/정답/이미지 수정 ---- */
 function openEditModal(id, onSaved){
   const original = getData().find(d=>d.id===id);
@@ -6107,16 +6183,6 @@ function openEditModal(id, onSaved){
           </select>
           <select class="search-box" id="editUnitMinor" style="flex:1;"></select>
         </div>
-      </div>
-      <div class="edit-field">
-        <label>출제 정보 <small style="font-weight:400;color:var(--muted);">(연도·회차가 잘못 분류된 경우 여기서 고치세요. 문제 고유 id는 안 바뀌니 학습기록·즐겨찾기는 그대로 유지돼요)</small></label>
-        <div class="btn-row" style="gap:8px;">
-          <input type="number" class="search-box" id="editYear" placeholder="연도" value="${original.year!=null?original.year:''}" style="flex:1;">
-          <input type="number" class="search-box" id="editRound" placeholder="회차" value="${original.round!=null?original.round:''}" style="flex:1;">
-          <input type="number" class="search-box" id="editNo" placeholder="순번" value="${original.no!=null?original.no:''}" style="flex:1;">
-          <input type="number" class="search-box" id="editPoints" placeholder="배점" value="${original.points!=null?original.points:''}" style="flex:1;">
-        </div>
-        <p style="font-size:0.74rem;color:var(--muted);margin-top:4px;">연도를 비워두면 "연도 미상" 문제로 분류돼요.</p>
       </div>
       <div class="edit-field">
         <label>이미지 (<span id="editImageCount">${workingImages.length}</span>장) <small style="font-weight:400;color:var(--muted);">(파일 선택 외에도 이미지를 이 영역으로 드래그하거나, 복사한 이미지를 여기에 붙여넣기(Ctrl+V) 할 수 있어요)</small></label>
@@ -6382,49 +6448,30 @@ function openEditModal(id, onSaved){
     const aBoxOpen = (aText.match(/\{\{BOX\}\}/g)||[]).length;
     const aBoxClose = (aText.match(/\{\{\/BOX\}\}/g)||[]).length;
     if(aBoxOpen !== aBoxClose){ alert("박스 표시({{BOX}}/{{/BOX}}) 개수가 맞지 않습니다. 정답 내용을 확인해주세요."); return; }
-    // 출제 정보(연도/회차/순번/배점) 파싱 + 검증. 이 필드들은 문항의 "신원(id)"과는 무관한
-    // 데이터일 뿐이라 자유롭게 고칠 수 있게 하되, 값이 이상하면(연도 범위 밖 등) 저장을 막는다.
-    const parseNum = (elId)=>{
-      const raw = overlay.querySelector(elId).value.trim();
-      if(raw === "") return null;
-      const n = Number(raw);
-      return Number.isFinite(n) ? n : NaN;
-    };
-    const newYear = parseNum("#editYear");
-    const newRound = parseNum("#editRound");
-    const newNo = parseNum("#editNo");
-    const newPoints = parseNum("#editPoints");
-    if([newYear,newRound,newNo,newPoints].some(v=>Number.isNaN(v))){ alert("연도·회차·순번·배점은 숫자만 입력해주세요."); return; }
-    if(newYear!=null && (newYear<1900 || newYear>2100)){ alert("연도는 1900~2100 사이로 입력해주세요."); return; }
-    if(newRound!=null && newRound<=0){ alert("회차는 1 이상의 숫자로 입력해주세요."); return; }
     if(!store.edits) store.edits = {};
     const dupIds = findDuplicateIds(id);
-    let dupTargets = [];
+    let targets = [id];
     if(dupIds.length){
-      const applyAll = confirm(`이 문제는 중복 출제된 문제가 ${dupIds.length}개 더 있습니다.\n중복된 문제도 모두 함께 수정할까요?\n\n(문제/정답/키워드/단원/이미지만 함께 적용되고, 연도·회차·순번·배점은 이 문제에만 적용됩니다 — 중복 문제들은 원래 서로 다른 연도·회차에 출제된 별개 기록이기 때문이에요)\n\n확인: 중복 문제 모두 수정\n취소: 이 문제만 수정`);
-      if(applyAll) dupTargets = dupIds;
+      const applyAll = confirm(`이 문제는 중복 출제된 문제가 ${dupIds.length}개 더 있습니다.\n중복된 문제도 모두 함께 수정할까요?\n\n확인: 중복 문제 모두 수정\n취소: 이 문제만 수정`);
+      if(applyAll) targets = targets.concat(dupIds);
     }
     const tagsText = overlay.querySelector("#editTags").value || "";
     const tagsArr = tagsText.split(",").map(t=>t.trim()).filter(Boolean).slice(0,6);
     const newUnitMajor = overlay.querySelector("#editUnitMajor").value;
     const newUnitMinor = overlay.querySelector("#editUnitMinor").value;
-    // 문제/정답/키워드/단원/이미지는 "중복 문제도 함께 수정"을 선택했다면 그 문항들에도 그대로 적용.
-    const sharedPayload = {question:qText, answer:aText, images:workingImages, tags:tagsArr, unitMajor:newUnitMajor, unitMinor:newUnitMinor};
-    // 연도/회차/순번/배점은 이 문항 하나에만 적용 — 중복 그룹의 다른 문항들은 원래
-    // 서로 다른 시점에 출제된 별개 기록이므로 절대로 같이 덮어쓰면 안 된다.
-    const metaPayload = {year:newYear, round:newRound, no:newNo, points:newPoints};
-    const editPayload = {...sharedPayload, ...metaPayload};
-    store.edits[id] = editPayload;
-    dupTargets.forEach(tid=>{ store.edits[tid] = sharedPayload; });
-    const targets = [id, ...dupTargets];
+    const editPayload = {question:qText, answer:aText, images:workingImages, tags:tagsArr, unitMajor:newUnitMajor, unitMinor:newUnitMinor};
+    targets.forEach(tid=>{
+      // 출제 정보(연도/회차/순번/배점)는 별도의 "출제 정보 수정" 팝업에서만 다루며, 이미
+      // store.edits[tid]에 그 값들이 들어있을 수 있으니 여기서는 덮어쓰지 않고 보존한다.
+      store.edits[tid] = {...store.edits[tid], ...editPayload};
+    });
     const ok = saveStore();
     if(!ok) return; // 저장 실패 시 편집창을 닫지 않고 이미지를 줄여 재시도할 수 있게 유지
     close();
     toast(targets.length>1 ? `중복 문제 ${targets.length}개를 함께 수정했습니다` : "저장되었습니다");
     if(onSaved) onSaved();
     // 관리자라면, 이 수정을 전체 사용자 기본값으로도 적용할지 물어본다 (개인 수정은 이미 위에서 저장 완료됨)
-    maybeAskAdminPublish(id, editPayload);
-    dupTargets.forEach(tid=>{ maybeAskAdminPublish(tid, sharedPayload); });
+    targets.forEach(tid=>{ maybeAskAdminPublish(tid, store.edits[tid] || editPayload); });
   });
 }
 

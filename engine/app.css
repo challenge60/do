@@ -488,6 +488,8 @@
   .tag.type{background:var(--amber-soft);color:#6b5427;}
   .tag.freq{background:#eee;color:#666;}
   .tag.dup{background:var(--rose-soft);color:var(--rose);}
+  .tag.meta-edit-btn{background:transparent;border:1px solid var(--line);color:var(--muted);cursor:pointer;padding:2px 7px;}
+  .tag.meta-edit-btn:hover{border-color:var(--teal);color:var(--teal);}
 
   .card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
   .edit-mini{background:#fff;border:1px solid var(--line);border-radius:8px;padding:5px 11px;font-size:0.74rem;color:var(--muted);cursor:pointer;flex-shrink:0;white-space:nowrap;}

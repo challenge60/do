@@ -88,19 +88,27 @@
     try {
       const { data, error } = await supabaseClient
         .from("question_overrides")
-        .select("question_id,question,answer,images,tags,unit_major,unit_minor")
+        .select("question_id,question,answer,images,tags,unit_major,unit_minor,year,round,no,points")
         .eq("cert_id", CERT_ID);
       if (error) throw error;
       const map = {};
       (data || []).forEach((row) => {
-        map[row.question_id] = {
-          question: row.question,
-          answer: row.answer,
-          images: row.images,
-          tags: row.tags,
-          unitMajor: row.unit_major,
-          unitMinor: row.unit_minor,
-        };
+        // 값이 실제로 채워진 필드만 포함한다. DB에는 컬럼이 NULL로 남아있을 수 있는데
+        // (예: "출제 정보만" 발행하고 question/answer는 손댄 적 없는 경우), 여기서
+        // question:null 같은 값을 넣어버리면 withEdits()의 스프레드 병합이 원본 문제
+        // 텍스트를 null로 덮어써서 화면에서 문제가 사라져 보이는 심각한 버그가 생긴다.
+        const entry = {};
+        if (row.question != null) entry.question = row.question;
+        if (row.answer != null) entry.answer = row.answer;
+        if (row.images != null) entry.images = row.images;
+        if (row.tags != null) entry.tags = row.tags;
+        if (row.unit_major != null) entry.unitMajor = row.unit_major;
+        if (row.unit_minor != null) entry.unitMinor = row.unit_minor;
+        if (row.year != null) entry.year = row.year;
+        if (row.round != null) entry.round = row.round;
+        if (row.no != null) entry.no = row.no;
+        if (row.points != null) entry.points = row.points;
+        map[row.question_id] = entry;
       });
       window.adminOverrides = map;
     } catch (e) {
@@ -145,16 +153,34 @@
   window.publishAdminOverride = async function (questionId, payload) {
     const { data: { session } } = await supabaseClient.auth.getSession();
     if (!session) throw new Error("로그인이 필요합니다");
+    // payload가 문제/정답 등 전체 필드를 담고 있을 수도, "출제 정보 수정" 팝업처럼
+    // year/round/no/points만 담고 있을 수도 있다. 기존에 발행된 값이 있다면 먼저
+    // 가져와서 병합한 뒤 upsert해야, 부분 수정이 나머지 필드를 null로 지워버리는
+    // 사고를 막을 수 있다.
+    const { data: existingRows } = await supabaseClient
+      .from("question_overrides")
+      .select("question,answer,images,tags,unit_major,unit_minor,year,round,no,points")
+      .eq("cert_id", CERT_ID)
+      .eq("question_id", questionId)
+      .maybeSingle();
+    const existing = existingRows || {};
+    const merged = {
+      question: payload.question !== undefined ? payload.question : existing.question,
+      answer: payload.answer !== undefined ? payload.answer : existing.answer,
+      images: payload.images !== undefined ? payload.images : existing.images,
+      tags: payload.tags !== undefined ? payload.tags : existing.tags,
+      unit_major: payload.unitMajor !== undefined ? payload.unitMajor : existing.unit_major,
+      unit_minor: payload.unitMinor !== undefined ? payload.unitMinor : existing.unit_minor,
+      year: payload.year !== undefined ? payload.year : existing.year,
+      round: payload.round !== undefined ? payload.round : existing.round,
+      no: payload.no !== undefined ? payload.no : existing.no,
+      points: payload.points !== undefined ? payload.points : existing.points,
+    };
     const { error } = await supabaseClient.from("question_overrides").upsert(
       {
         cert_id: CERT_ID,
         question_id: questionId,
-        question: payload.question,
-        answer: payload.answer,
-        images: payload.images,
-        tags: payload.tags,
-        unit_major: payload.unitMajor,
-        unit_minor: payload.unitMinor,
+        ...merged,
         updated_at: new Date().toISOString(),
         updated_by: session.user.id,
       },
@@ -163,7 +189,20 @@
     if (error) throw error;
     // 방금 발행한 내용을 즉시 로컬 오버레이에도 반영 (재접속 없이 바로 확인 가능하도록)
     if (!window.adminOverrides) window.adminOverrides = {};
-    window.adminOverrides[questionId] = { ...payload };
+    const prevLocal = window.adminOverrides[questionId] || {};
+    window.adminOverrides[questionId] = {
+      ...prevLocal,
+      question: merged.question,
+      answer: merged.answer,
+      images: merged.images,
+      tags: merged.tags,
+      unitMajor: merged.unit_major,
+      unitMinor: merged.unit_minor,
+      year: merged.year,
+      round: merged.round,
+      no: merged.no,
+      points: merged.points,
+    };
   };
 
   // ---------- 로그아웃 후에도 화면이 남아있는 문제 방지 ----------
