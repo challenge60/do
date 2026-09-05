@@ -19,6 +19,17 @@
 </head>
 <body>
 
+<div id="authGateOverlay" style="position:fixed;inset:0;z-index:99999;background:#f6f3ec;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;font-family:sans-serif;">
+  <div style="width:28px;height:28px;border:3px solid #d8d2c2;border-top-color:#c9822e;border-radius:50%;animation:authGateSpin .8s linear infinite;"></div>
+  <p style="color:#7a7568;font-size:13px;margin:0;">불러오는 중…</p>
+</div>
+<style>@keyframes authGateSpin{to{transform:rotate(360deg);}}</style>
+<script>
+  // 안전장치: 어떤 이유로든(네트워크 오류 등) storage.js가 이 오버레이를 못 지우는
+  // 경우를 대비해, 8초 뒤엔 강제로 걷어낸다 — 로딩 화면에 영원히 갇히는 사고 방지용.
+  setTimeout(function(){ var el = document.getElementById("authGateOverlay"); if (el) el.remove(); }, 8000);
+</script>
+
 <div class="app-shell">
 <header class="top compact">
   <div class="wrap">
@@ -38,6 +49,7 @@
   </div>
   </div>
 </header>
+
 
 <div class="wrap" id="app">
     <div class="app-loading-placeholder" style="text-align:center;padding:60px 20px;color:var(--muted);">

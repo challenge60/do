@@ -236,10 +236,15 @@
     if (document.visibilityState === "visible") recheckSessionOrRedirect();
   });
 
+  function removeAuthGateOverlay() {
+    const el = document.getElementById("authGateOverlay");
+    if (el) el.remove();
+  }
+
   async function init() {
     const { data: { session } } = await supabaseClient.auth.getSession();
     if (!session) {
-      goToLoginWithReturn();
+      goToLoginWithReturn(); // 오버레이를 남겨둔 채로 이동 — 리다이렉트 직전까지 화면 내용이 안 보임
       return;
     }
     const userId = session.user.id;
@@ -255,7 +260,7 @@
         .eq("user_id", userId)
         .maybeSingle();
       if (profileRow && profileRow.approved === false) {
-        window.location.href = "../../index.html";
+        window.location.href = "../../index.html"; // 오버레이가 화면을 가린 채로 이동
         return;
       }
     } catch (e) {
@@ -263,6 +268,12 @@
       window.location.href = "../../index.html";
       return;
     }
+
+    // 승인 확인 통과 — 이제 화면을 가리고 있던 로딩 오버레이를 걷어낸다.
+    // (app.js는 이미 페이지 로드 시점에 문항 화면을 다 그려놓은 상태이지만, 지금까지
+    //  오버레이가 그 위를 덮고 있었기 때문에 승인 전에는 아무것도 보이지 않았다 —
+    //  공유링크로 특정 문제에 바로 진입하는 경로를 포함해 어떤 경로로 들어와도 동일)
+    removeAuthGateOverlay();
 
     // 0-1) 이 브라우저에 남아있는 로컬 학습기록이 지금 로그인한 사람 것이 맞는지 확인한다.
     //    같은 기기에서 계정을 바꿔가며 로그인하면(예: 관리자로 쓰다가 로그아웃 후 다른 계정으로
