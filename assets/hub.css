@@ -179,6 +179,25 @@ body{
   box-shadow:0 10px 24px -14px rgba(36,60,61,.25);
   border-color:var(--amber);
 }
+.ticket-locked{
+  opacity:.55;
+  filter:grayscale(.4);
+}
+.ticket-locked:hover{
+  transform:none;
+  box-shadow:none;
+  border-color:var(--line);
+}
+.ticket-status-badge{
+  display:inline-block;
+  font-size:11px;
+  font-weight:700;
+  color:var(--amber, #b8860b);
+  background:rgba(184,134,11,.12);
+  border-radius:6px;
+  padding:2px 7px;
+  margin:0 0 4px;
+}
 .ticket-body{flex:1;min-width:0;}
 .ticket-name{
   font-size:16.5px;

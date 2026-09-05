@@ -196,18 +196,38 @@ async function fetchProfile(userId) {
   try {
     const { data, error } = await supabaseClient
       .from("profiles")
-      .select("nickname, approved")
+      .select("nickname, approved, role, editor_certs")
       .eq("user_id", userId)
       .maybeSingle();
     if (error) throw error;
     // 프로필 자체가 없는 사용자(이 기능이 생기기 전 가입자 등)는 승인 게이트가 없던 시절
     // 가입한 사람이므로 차단하지 않는다. approved는 프로필이 있을 때만 의미를 가짐.
-    return { nickname: data ? data.nickname : null, approved: data ? data.approved : true };
+    return {
+      nickname: data ? data.nickname : null,
+      approved: data ? data.approved : true,
+      role: data ? data.role : null,
+      editorCerts: (data && data.editor_certs) || [],
+    };
   } catch (e) {
     console.warn("프로필을 불러오지 못했습니다:", e.message);
-    return { nickname: null, approved: true };
+    return { nickname: null, approved: true, role: null, editorCerts: [] };
   }
 }
+
+// 자격증별 상태 접근 제어.
+// - "open"(기본값, 필드 생략 시): 누구나 정상 이용
+// - "maintenance": 점검 중 — 일반 사용자는 안내만 보고, 관리자/해당 종목 편집자는 그대로 이용(백업/수정 작업용)
+// - "coming_soon": 준비 중 — 일반 사용자는 안내만 보고, 관리자/해당 종목 편집자는 데이터 작업을 위해 그대로 이용
+function canBypassCertStatus(cert, isAdmin, profile) {
+  if (isAdmin || profile.role === "admin") return true;
+  if (profile.role === "editor" && (profile.editorCerts || []).includes(cert.id)) return true;
+  return false;
+}
+
+const CERT_STATUS_LABEL = {
+  maintenance: { badge: "🛠 점검 중", alertMsg: "지금 점검 중입니다. 잠시 후 다시 이용해주세요." },
+  coming_soon: { badge: "🚧 준비 중", alertMsg: "아직 준비 중인 자격증이에요. 곧 만나요!" },
+};
 
 function openNicknameModal(currentNickname, onSaved, extraFields) {
   const overlay = document.createElement("div");
@@ -323,16 +343,24 @@ async function renderHub(session) {
     const rankersLine = topRankers.length
       ? `<p class="ticket-rankers">${topRankers.map((r, i) => `${RANK_MEDALS[i] || ""}${escapeHtml(r.nickname)}`).join(" ")}</p>`
       : "";
-    return `
-      <a class="ticket" href="${escapeHtml(cert.path)}">
+    const status = cert.status || "open";
+    const isLocked = status !== "open" && !canBypassCertStatus(cert, isAdmin, profile);
+    const statusInfo = CERT_STATUS_LABEL[status];
+    const bypassBadge = status !== "open" && !isLocked
+      ? `<span class="ticket-status-badge">${statusInfo.badge} · 관리자/편집자만 접근 중</span>` : "";
+    const bodyHtml = `
         ${stampRing(pct, pct >= 100)}
         <div class="ticket-body">
           <p class="ticket-name">${escapeHtml(cert.name)}</p>
           <p class="ticket-subtitle">${metaLine}</p>
+          ${bypassBadge}
           ${rankersLine}
-          <p class="ticket-cta">${pct > 0 ? "이어서 학습 →" : "학습 시작 →"}</p>
-        </div>
-      </a>`;
+          <p class="ticket-cta">${isLocked ? statusInfo.badge : (pct > 0 ? "이어서 학습 →" : "학습 시작 →")}</p>
+        </div>`;
+    if (isLocked) {
+      return `<div class="ticket ticket-locked" data-locked-cert="${escapeHtml(cert.id)}" data-alert-msg="${escapeHtml(statusInfo.alertMsg)}">${bodyHtml}</div>`;
+    }
+    return `<a class="ticket" href="${escapeHtml(cert.path)}">${bodyHtml}</a>`;
   }).join("");
 
   root.innerHTML = `
@@ -381,6 +409,9 @@ async function renderHub(session) {
   });
   document.getElementById("nicknameEditBtn").addEventListener("click", () => {
     openNicknameModal(nickname, () => renderHub(session));
+  });
+  document.querySelectorAll(".ticket-locked").forEach((el) => {
+    el.addEventListener("click", () => alert(el.getAttribute("data-alert-msg")));
   });
   bindHubInstallBtn();
 }

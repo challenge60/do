@@ -52,6 +52,16 @@
       "titleText": "콘크리트기사 실기 필답 노트",
       "count": 214,
       "yearRange": "2012–2024"
+    },
+    {
+      "id": "csafe",
+      "mark": "건설안전기사",
+      "shortMark": "건설안전",
+      "sub": "실기 노트 (필답형·작업형)",
+      "shortSub": "실기",
+      "titleText": "건설안전기사 실기 노트",
+      "count": 905,
+      "yearRange": "2016–2026"
     }
   ]
 }

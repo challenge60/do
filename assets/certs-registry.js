@@ -44,4 +44,15 @@ const CERTS_REGISTRY = [
     questionCount: 214,
     shortCode: "f",
   },
+  {
+    id: "csafe",
+    name: "건설안전기사 실기",
+    subtitle: "필답형·작업형 · 건설안전",
+    path: "certs/csafe/index.html",
+    questionCount: 905,
+    shortCode: "g",
+    // 결측 3건 보완 + 이미지 추출 작업이 끝날 때까지 준비중으로 노출.
+    // 관리자/편집자(profiles.editor_certs에 "csafe" 포함)는 그대로 접근해서 작업 계속 가능.
+    status: "coming_soon",
+  },
 ];

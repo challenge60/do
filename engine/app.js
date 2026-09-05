@@ -414,7 +414,7 @@ async function maybeAskAdminPublish(id, payload){
 /* ============ 활성 자격증 설정 적용 (기본 EXAM_CONFIG 또는 가져온 데이터의 examConfig) ============ */
 // 자격증별 실기/필답형 구분(짧은 표기). CERT_ID는 data.js가 정의하는 전역 상수.
 // 새 자격증을 추가할 때 이 표에 없으면 cfg.subtitle을 그대로 쓰도록 폴백 처리됨.
-const SHORT_SUB_BY_CERT = { "arch-siljak":"실기", "waterproof-siljak":"실기", "safety-siljak":"필답형", "ergonomics-pildap":"필답", "concrete-siljak":"실기" };
+const SHORT_SUB_BY_CERT = { "arch-siljak":"실기", "waterproof-siljak":"실기", "safety-siljak":"필답형", "ergonomics-pildap":"필답", "concrete-siljak":"실기", "csafe":"실기" };
 function activeExamConfig(){
   return store.examConfig || EXAM_CONFIG;
 }
