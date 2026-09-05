@@ -325,6 +325,20 @@ async function fetchCertTopRankers() {
 }
 const RANK_MEDALS = ["🥇", "🥈", "🥉"];
 
+async function fetchPendingApprovalCount() {
+  try {
+    const { count, error } = await supabaseClient
+      .from("profiles")
+      .select("user_id", { count: "exact", head: true })
+      .eq("approved", false);
+    if (error) throw error;
+    return count || 0;
+  } catch (e) {
+    console.warn("가입 승인 대기 수를 불러오지 못했습니다:", e.message);
+    return 0;
+  }
+}
+
 async function renderHub(session) {
   const user = session.user;
   const [progressMap, isAdmin, profile, topRankersByCert] = await Promise.all([
@@ -384,7 +398,7 @@ async function renderHub(session) {
           </span>
           <div class="hub-user-actions">
             <a class="admin-link-btn" href="ranking.html" style="background:var(--teal);">🏆 랭킹</a>
-            ${isAdmin ? `<a class="admin-link-btn" href="admin.html">🛠 관리자</a>` : ""}
+            ${isAdmin ? `<a class="admin-link-btn" href="admin.html">🛠 관리자<span id="pendingApprovalBadge" class="admin-link-badge" style="display:none;"></span></a>` : ""}
             <button class="logout-btn" id="logoutBtn">로그아웃</button>
           </div>
         </div>
@@ -414,6 +428,14 @@ async function renderHub(session) {
     el.addEventListener("click", () => alert(el.getAttribute("data-alert-msg")));
   });
   bindHubInstallBtn();
+  if (isAdmin) {
+    fetchPendingApprovalCount().then((count) => {
+      const badge = document.getElementById("pendingApprovalBadge");
+      if (!badge || count <= 0) return;
+      badge.textContent = count > 99 ? "99+" : String(count);
+      badge.style.display = "block";
+    });
+  }
 }
 
 function renderLogin(statusMsg, statusType, mode) {
@@ -782,6 +804,7 @@ async function applyPendingProfileIfAny(userId) {
 }
 
 function renderPendingApproval(email) {
+  const kakaoUrl = "https://open.kakao.com/me/upvip";
   root.innerHTML = `
     <header class="hub-topbar">
       <div class="wrap">
@@ -791,7 +814,11 @@ function renderPendingApproval(email) {
     <div class="login-screen">
       <div class="login-card">
         <h1 class="login-title">가입 승인 대기 중</h1>
-        <p class="login-desc">${escapeHtml(email)} 계정은 아직 관리자 승인을 기다리고 있어요.<br>승인되면 바로 이용하실 수 있어요. 잠시만 기다려주세요.</p>
+        <p class="login-desc">${escapeHtml(email)} 계정은 아직 관리자 승인을 기다리고 있어요.</p>
+        <div class="kakao-approval-box">
+          <p class="kakao-approval-desc">지금은 폐쇄 서비스로 운영 중이라, 아래 카카오톡 오픈채팅으로 <b>1:1 승인 요청</b>을 보내주셔야 빠르게 확인돼요.</p>
+          <a class="kakao-approval-btn" href="${kakaoUrl}" target="_blank" rel="noopener">💬 카카오톡 1:1로 승인 요청하기</a>
+        </div>
         <button type="button" class="logout-btn" id="pendingLogoutBtn" style="width:100%;">로그아웃</button>
       </div>
     </div>`;
