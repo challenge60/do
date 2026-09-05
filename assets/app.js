@@ -10,7 +10,7 @@
        세 가지 다 파일을 건드릴 때마다 이 주석부터 확인할 것.
    [3] 엔진 수정 후에는 곧바로 배포본을 만들지 말고, 무엇을 고쳤는지 먼저 설명하고
        사용자 컨펌을 받은 뒤에만 배포본(들)을 새로 만든다. */
-const APP_VERSION = "2026.09.04_07.58";
+const APP_VERSION = "2026.09.05_09.19";
 
 /* ============ 강제 업데이트 임계값 ============
    평소엔 빈 문자열("")로 둔다 — 이 경우 새 버전이 나와도 사용자가 원할 때 눌러서
@@ -739,6 +739,37 @@ function reviewMix(){
   if(m && typeof m.wrong==="number" && typeof m.srs==="number" && typeof m.new==="number") return m;
   return {wrong:40, srs:40, new:20};
 }
+/* ============ 필답형·작업형 비중 (examPart mix) ============
+   방수산업기사(같은 날 오전·오후로 필답형/작업형을 같이 봄)와 달리 산업안전기사·건설안전기사
+   등은 두 시험을 서로 다른 날짜에 응시하는 경우가 많다. "일단 필답형만 붙고 작업형은 나중에"
+   식으로 순서를 두고 공부하는 사람이 많은데, 회독 학습 큐에 작업형 문제가 섞여서 튀어나오면
+   아직 준비 안 된 내용이라 오히려 혼선을 준다. 그래서 두 시험 종류(examPart)가 섞여 있는
+   자격증에 한해, 오답노트·복습주기·신규 각 풀에서 종류별로 얼마나(%) 뽑아올지 사용자가 직접
+   정할 수 있게 한다. 0으로 두면 그 종류는 완전히 제외된다. */
+function reviewExamPartMix(){
+  const parts = datasetExamParts(getData());
+  if(parts.length < 2) return null; // 필답형/작업형 구분이 없는 자격증은 해당 없음
+  const m = store.reviewExamPartMix;
+  if(m && parts.every(p=> typeof m[p]==="number")) return m;
+  const even = {};
+  parts.forEach(p=> even[p] = 100); // 기본값: 전부 포함(기존 동작과 동일)
+  return even;
+}
+/* 풀(pool) 하나를 examPart 비중대로 나눠 담는다. 예: {필답형:70, 작업형:30}이면 해당 풀에서
+   필답형 70%, 작업형 30% 비율로 섞어 담되, 어느 한쪽이 0%면 그 종류는 아예 안 들어간다. */
+function applyExamPartMix(pool, mix, wantCount){
+  if(!mix) return pool.slice(0, wantCount);
+  const byPart = {};
+  pool.forEach(q=>{ (byPart[q.examPart] ||= []).push(q); });
+  const parts = Object.keys(mix).filter(p=> mix[p] > 0 && byPart[p]);
+  const totalWeight = parts.reduce((s,p)=> s+mix[p], 0) || 1;
+  const picked = [];
+  parts.forEach(p=>{
+    const n = Math.round(wantCount * mix[p] / totalWeight);
+    picked.push(...byPart[p].slice(0, n));
+  });
+  return picked;
+}
 function reviewRounds(){
   return (store.reviewGoal && store.reviewGoal.rounds) ? store.reviewGoal.rounds : null;
 }
@@ -843,13 +874,16 @@ function buildDailyReviewQueue(){
   const goal = dailyReviewGoal();
   const mix = reviewMix();
   const yr = reviewYearRange();
-  const wrongPool = getData().filter(q=> store.wrong[q.id] && inReviewYearRange(q));
-  const srsPool = getSRSQueue().filter(q=> inReviewYearRange(q));
+  const epMix = reviewExamPartMix();
+  // 필답형/작업형 비중에서 0%로 지정된 종류는 회독 학습 대상에서 아예 제외한다.
+  const epOk = (q)=> !epMix || epMix[q.examPart] > 0;
+  const wrongPool = getData().filter(q=> store.wrong[q.id] && inReviewYearRange(q) && epOk(q));
+  const srsPool = getSRSQueue().filter(q=> inReviewYearRange(q) && epOk(q));
   // 신규(한 번도 안 푼) 문제는 기본적으로 최신 연도부터 나오도록 정렬한다.
   // (예전엔 data.js 원본 순서(가장 오래된 연도부터)를 그대로 써서, 항상 같은 오래된 문제부터
   //  시작하는 것처럼 느껴진다는 제보가 있었음 — 시험 대비상으로도 최근 기출을 먼저 보는 게 자연스러움)
   const newPool = getData()
-    .filter(q=> isUngraded(q.id) && inReviewYearRange(q))
+    .filter(q=> isUngraded(q.id) && inReviewYearRange(q) && epOk(q))
     .sort((a,b)=> (b.year - a.year) || ((b.round||1) - (a.round||1)) || ((a.no||0) - (b.no||0)));
   if(!goal){
     // 목표(D-day·회독수) 미설정 시: 기존처럼 오답→SRS→신규 우선순위로 전부 반환
@@ -860,10 +894,11 @@ function buildDailyReviewQueue(){
     srs: Math.round(goal*mix.srs/100),
     new: Math.round(goal*mix.new/100)
   };
+  // 위에서 이미 0% 종류를 걸러낸 풀이므로, 여기서는 남은 종류들끼리 비중대로 섞기만 하면 된다.
   const picked = {
-    wrong: wrongPool.slice(0, want.wrong),
-    srs: srsPool.slice(0, want.srs),
-    new: newPool.slice(0, want.new)
+    wrong: applyExamPartMix(wrongPool, epMix, want.wrong),
+    srs: applyExamPartMix(srsPool, epMix, want.srs),
+    new: applyExamPartMix(newPool, epMix, want.new)
   };
   let shortfall = goal - (picked.wrong.length+picked.srs.length+picked.new.length);
   if(shortfall > 0){
@@ -2244,6 +2279,8 @@ function renderSRSList(){
 
   const q = buildDailyReviewQueue();
   const mix = reviewMix();
+  const epMix = reviewExamPartMix();
+  const examParts = datasetExamParts(getData());
   const doneToday = todaySolvedCount();
   const goal = q.goal;
   const pct = goal ? Math.min(100, Math.round((doneToday/goal)*100)) : 0;
@@ -2427,6 +2464,17 @@ function renderSRSList(){
           <button class="btn ghost" id="saveMixBtn" style="margin-top:10px;width:100%;">비율 저장</button>
         </div>
 
+        ${epMix ? `
+        <div style="margin-top:20px;padding-top:14px;border-top:1px solid var(--line);">
+          <h3>필답형·작업형 비중</h3>
+          <p style="font-size:0.78rem;color:var(--muted);margin-top:4px;">이 자격증은 필답형·작업형이 나뉘어 있어요. 한쪽을 아직 준비 안 하셨다면 0으로 두면 회독 학습에서 완전히 빠집니다.</p>
+          <div class="mix-row">
+            ${examParts.map(p=>`<div class="mix-item"><span>${escapeHtml(p)}</span><input type="number" class="epMixInput" data-part="${escapeHtml(p)}" min="0" max="100" value="${epMix[p]}"></div>`).join("")}
+          </div>
+          <button class="btn ghost" id="saveEpMixBtn" style="margin-top:10px;width:100%;">비중 저장</button>
+        </div>
+        ` : ""}
+
         <div style="margin-top:20px;padding-top:14px;border-top:1px solid var(--line);">
           <h3>대상 연도 범위</h3>
           <p style="font-size:0.78rem;color:var(--muted);margin-top:4px;">
@@ -2550,6 +2598,18 @@ function renderSRSList(){
     if(sum<=0){ alert("비율의 합이 0보다 커야 해요."); return; }
     w = Math.round(w/sum*100); s = Math.round(s/sum*100); n = 100-w-s;
     store.reviewMix = {wrong:w, srs:s, new:n};
+    saveStore();
+    renderSRSList();
+  });
+  const saveEpMixBtn = app.querySelector("#saveEpMixBtn");
+  if(saveEpMixBtn) saveEpMixBtn.addEventListener("click", ()=>{
+    const next = {};
+    app.querySelectorAll(".epMixInput").forEach(el=>{
+      next[el.dataset.part] = Math.max(0, Math.min(100, Number(el.value)||0));
+    });
+    // 전부 0으로 두면 회독 학습 자체가 텅 비어버리니 막는다.
+    if(Object.values(next).every(v=> v<=0)){ alert("적어도 한 종류는 0보다 커야 해요."); return; }
+    store.reviewExamPartMix = next;
     saveStore();
     renderSRSList();
   });
