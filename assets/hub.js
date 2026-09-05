@@ -2,6 +2,15 @@
 
 const root = document.getElementById("root");
 
+// 회원가입 처리 도중(signUp 호출 ~ profiles.upsert로 approved:false 저장 완료까지)에는
+// 전역 onAuthStateChange(SIGNED_IN) 리스너가 끼어들지 못하게 막는 플래그.
+// signUp()이 세션을 만들자마자 SIGNED_IN 이벤트가 곧바로 발생할 수 있는데, 이게 뒤이어
+// 실행되는 profiles.upsert({approved:false})보다 먼저 끝나버리면 프로필이 아직 DB에
+// 없는 찰나에 승인 여부를 확인하게 되어(레이스 컨디션) "미승인" 계정이 순간적으로
+// 허브 화면(및 그 뒤 자격증 화면)에 들어가버리는 사고가 있었다. 가입 흐름은 이 플래그로
+// 리스너를 잠가두고, 저장이 다 끝난 뒤 직접 화면을 그려서 안전하게 처리한다.
+let signupInFlight = false;
+
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
@@ -530,6 +539,7 @@ function renderLogin(statusMsg, statusType, mode) {
         return;
       }
       status.textContent = "가입 처리 중...";
+      signupInFlight = true; // 저장 끝날 때까지 전역 SIGNED_IN 리스너가 먼저 화면을 넘기지 못하게 잠금
       try {
         const { data, error } = await supabaseClient.auth.signUp({
           email,
@@ -542,6 +552,7 @@ function renderLogin(statusMsg, statusType, mode) {
         // 외부에 노출하지 않기 위한 설계). 이 경우 비밀번호만 그 기존 계정에 반영되고 새로 만들어지진 않음.
         const alreadyExists = data && data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0;
         if (alreadyExists) {
+          signupInFlight = false;
           status.textContent = `이미 가입되어 있는 이메일이에요. 방금 입력하신 비밀번호가 그 계정에 저장됐으니, "로그인" 탭에서 바로 로그인해보세요.`;
           status.className = "login-status ok";
           btn.disabled = false;
@@ -556,6 +567,7 @@ function renderLogin(statusMsg, statusType, mode) {
             { onConflict: "user_id" }
           );
           if (profileError) {
+            signupInFlight = false;
             // 계정 자체는 이미 만들어졌고 로그인도 된 상태 — 닉네임만 다시 정하면 되므로
             // 회원가입을 처음부터 다시 시키지 않고, 그 자리에서 바로 닉네임 재입력 모달을 띄운다.
             const isDup = /duplicate|unique/i.test(profileError.message);
@@ -567,10 +579,15 @@ function renderLogin(statusMsg, statusType, mode) {
             openNicknameModal(null, () => { window.location.reload(); }, { approved: false, interested_certs: interestedCerts });
             return;
           }
-          status.textContent = "가입 완료! 관리자 승인 후 이용하실 수 있어요. 잠시 후 승인 대기 화면으로 이동해요.";
+          status.textContent = "가입 완료! 관리자 승인 후 이용하실 수 있어요.";
           status.className = "login-status ok";
-          // 아래 onAuthStateChange(SIGNED_IN)가 자동으로 승인 대기 화면(또는 승인된 경우 목록 화면)으로 이동시킴
+          // approved:false 저장이 확실히 끝난 지금 이 시점에 직접 승인 대기 화면으로 넘긴다.
+          // (레이스 컨디션 방지를 위해 잠가뒀던 전역 리스너는 이제 풀어주되, 화면 전환은
+          // 리스너에 맡기지 않고 여기서 확정적으로 처리한다)
+          signupInFlight = false;
+          renderPendingApproval(email);
         } else {
+          signupInFlight = false;
           sessionStorage.setItem("pendingNickname", nickname);
           sessionStorage.setItem("pendingInterestedCerts", JSON.stringify(interestedCerts));
           status.textContent = `${email} 주소로 인증 메일을 보냈어요. 메일함(스팸함도 확인!)에서 인증 링크를 눌러주시면 가입이 완료돼요.`;
@@ -578,6 +595,7 @@ function renderLogin(statusMsg, statusType, mode) {
           btn.disabled = false;
         }
       } catch (err) {
+        signupInFlight = false;
         const isRateLimit = /rate limit/i.test(err.message);
         status.textContent = isRateLimit
           ? "메일 발송 요청이 너무 잦아서 잠시 제한됐어요(보통 시간당 몇 통 수준). 1시간 정도 뒤에 다시 시도해주세요."
@@ -869,6 +887,7 @@ if (supabaseClient) {
       // 새 비밀번호를 직접 입력하는 화면부터 보여준다.
       renderSetNewPassword();
     } else if (event === "SIGNED_IN" && session) {
+      if (signupInFlight) return; // 가입 처리 중이면 이 리스너는 개입하지 않는다 (submit 핸들러가 직접 화면 전환)
       await applyPendingProfileIfAny(session.user.id);
       await proceedAfterLogin(session);
     } else if (event === "SIGNED_OUT") {

@@ -332,12 +332,16 @@ function loadStore(){
       if(!s.penNotes) s.penNotes = {}; // "기억하기"로 지정한 문제의 펜 필기(벡터 좌표) 영구 저장소
       if(!s.penRemembered) s.penRemembered = {}; // 어떤 문제를 "기억하기" 했는지 여부
       if(!Array.isArray(s.reviewCountModes) || !s.reviewCountModes.length) s.reviewCountModes = ["srs"];
+      if(!("__ownerUserId" in s)) s.__ownerUserId = null; // 이 필드가 없던 옛 로컬 데이터 — 소유자 미상으로 취급
       return s;
     }
   }catch(e){}
-  return {progress:{}, wrong:{}, bookmarks:{}, streak:{last:null,count:0}, solvedTotal:0, correctTotal:0, customData:null, edits:{}, examConfig:null, setRepeats:{}, penNotes:{}, penRemembered:{}, reviewCountModes:["srs"]};
+  return blankStore();
 }
 let store = loadStore();
+function blankStore(){
+  return {progress:{}, wrong:{}, bookmarks:{}, streak:{last:null,count:0}, solvedTotal:0, correctTotal:0, customData:null, edits:{}, examConfig:null, setRepeats:{}, penNotes:{}, penRemembered:{}, reviewCountModes:["srs"], __ownerUserId:null};
+}
 function saveStore(){
   try{
     localStorage.setItem(LS_KEY, JSON.stringify(store));

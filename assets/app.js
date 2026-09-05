@@ -10,7 +10,7 @@
        세 가지 다 파일을 건드릴 때마다 이 주석부터 확인할 것.
    [3] 엔진 수정 후에는 곧바로 배포본을 만들지 말고, 무엇을 고쳤는지 먼저 설명하고
        사용자 컨펌을 받은 뒤에만 배포본(들)을 새로 만든다. */
-const APP_VERSION = "2026.09.05_14.53";
+const APP_VERSION = "2026.09.05_15.12";
 
 /* ============ 강제 업데이트 임계값 ============
    평소엔 빈 문자열("")로 둔다 — 이 경우 새 버전이 나와도 사용자가 원할 때 눌러서
@@ -332,12 +332,16 @@ function loadStore(){
       if(!s.penNotes) s.penNotes = {}; // "기억하기"로 지정한 문제의 펜 필기(벡터 좌표) 영구 저장소
       if(!s.penRemembered) s.penRemembered = {}; // 어떤 문제를 "기억하기" 했는지 여부
       if(!Array.isArray(s.reviewCountModes) || !s.reviewCountModes.length) s.reviewCountModes = ["srs"];
+      if(!("__ownerUserId" in s)) s.__ownerUserId = null; // 이 필드가 없던 옛 로컬 데이터 — 소유자 미상으로 취급
       return s;
     }
   }catch(e){}
-  return {progress:{}, wrong:{}, bookmarks:{}, streak:{last:null,count:0}, solvedTotal:0, correctTotal:0, customData:null, edits:{}, examConfig:null, setRepeats:{}, penNotes:{}, penRemembered:{}, reviewCountModes:["srs"]};
+  return blankStore();
 }
 let store = loadStore();
+function blankStore(){
+  return {progress:{}, wrong:{}, bookmarks:{}, streak:{last:null,count:0}, solvedTotal:0, correctTotal:0, customData:null, edits:{}, examConfig:null, setRepeats:{}, penNotes:{}, penRemembered:{}, reviewCountModes:["srs"], __ownerUserId:null};
+}
 function saveStore(){
   try{
     localStorage.setItem(LS_KEY, JSON.stringify(store));
